@@ -1,3 +1,85 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>eBPFLAB 专注eBPF创新技术</title><link>http://www.ebpflab.com/</link><description>Recent content on eBPFLAB 专注eBPF创新技术</description><generator>Hugo -- gohugo.io</generator><language>zh-cn</language><lastBuildDate>Wed, 10 Jan 2024 00:00:00 +0000</lastBuildDate><atom:link href="http://www.ebpflab.com/index.xml" rel="self" type="application/rss+xml"/><item><title/><link>http://www.ebpflab.com/about/</link><pubDate>Wed, 10 Jan 2024 00:00:00 +0000</pubDate><guid>http://www.ebpflab.com/about/</guid><description>eBPFLAB专注eBPF创新技术
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>eBPFLAB 专注eBPF创新技术</title><link>http://www.ebpflab.com/</link><description>Recent content on eBPFLAB 专注eBPF创新技术</description><generator>Hugo -- gohugo.io</generator><language>zh-cn</language><lastBuildDate>Thu, 11 Jan 2024 00:00:00 +0000</lastBuildDate><atom:link href="http://www.ebpflab.com/index.xml" rel="self" type="application/rss+xml"/><item><title>可观测性 ftrace</title><link>http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7ftrace/</link><pubDate>Thu, 11 Jan 2024 00:00:00 +0000</pubDate><guid>http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7ftrace/</guid><description>介绍 ftrace是Function Tracer的意思，最开始主要用于记录内核函数运行轨迹；随着功能的逐渐增加，演变成一个跟踪框架。
+ftrace的运行不需要额外的程序，它内置在内核中，通过debugfs文件系统和用户交互。当然也有一些用户态程序方便用户交互，比如trace-cmd、kernelshark。
+工作原理 ftrace机制的执行，依赖于gcc的-pg编译选项，-pg选项在每个函数执行前插入mcount（和体系架构有关，不同架构名字有所差异）。在未启用追踪功能的时候，插入的指令为NOP，不做任何事情，启用追踪功能之后，NOP指令会被替换成ftrace_caller。
+mcout是一个trampoline跳床，它返回函数的返回值，提供了一种在原流程中执行桩函数的机制。
+ftrace_caller 工作如下图所示
+使用 ftrace的使用比较简单，与ftrace交互的API位于debufs文件系统中，通常在/sys/kernel/debug/目录下。
+因为ftrace是直接内置于内核中的的，所以使用它需要配置内核支持。
+通常开启如下几项配置
+CONFIG_FUNCTION_TRACER CONFIG_FUNCTION_GRAPH_TRACER CONFIG_DYNAMIC_FTRACE 其分为静态和动态trace，常使用动态trace。
+查看支持哪些tracer
+# cat /sys/kernel/debug/tracing/available_tracers hwlat blk mmiotrace function_graph wakeup_dl wakeup_rt wakeup function nop 设置使用那个tracer
+# echo wakeup &amp;gt; /sys/kernel/debug/tracing/current_tracer 查看当前使用的tracer
+# cat /sys/kernel/debug/tracing/current_tracer wakeup 启用/停用追踪
+echo 1 &amp;gt; /sys/kernel/debug/tracing/tracing_on echo 0 &amp;gt; /sys/kernel/debug/tracing/tracing_on 查看追踪的结果 (从文件中)
+# cat /sys/kernel/debug/tracing/trace |more # tracer: wakeup # # wakeup latency trace v1.1.5 on 5.4.0-42-generic # -------------------------------------------------------------------- # latency: 8450 us, #16610/16610, CPU#3 | (M:desktop VP:0, KP:0, SP:0 HP:0 #P:4) # ----------------- # | task: systemd-journal-575 (uid:0 nice:-1 policy:0 rt_prio:0) # ----------------- # # _------=&amp;gt; CPU# # / _-----=&amp;gt; irqs-off # | / _----=&amp;gt; need-resched # || / _---=&amp;gt; hardirq/softirq # ||| / _--=&amp;gt; preempt-depth # |||| / delay # cmd pid ||||| time | caller # \ / ||||| \ | / systemd-1 3d.</description></item><item><title>可观测性 kprobe</title><link>http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe/</link><pubDate>Thu, 11 Jan 2024 00:00:00 +0000</pubDate><guid>http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe/</guid><description>介绍 kprobe是一种动态调试机制，能够动态地中断内核处理流程并无中断地收集调试和性能信息，可以在内核的绝大多数指定函数中动态插入探测点来收集所需的调试状态信息而基本不影响内核原有的执行流程，kprobe不用修改内核源码，是指令集的探测技术。
+有三种方式来达到kprobe的目的。
+编写内核模块，增加kprobe hook。 使用ftrace 监控kprobe event。 使用ebpf 增加kprobe hook。 本篇只讲第一种。
+工作原理 工作机制如图所示，
+当注册一个kprobe的时候，把addr位置的指令修改为brk指令。
+CPU执行到addr处trap到pre_handler执行。
+pre_handler执行完毕后产生debug异常执行post_handler。
+CPU继续执行addr处的指令。
+kprobe的管理 初始化 init_kprobes初始化kprobe hash表kprobe_table;采集黑名单 kretprobe_blacklist; 异常notifier 以及模块notifier。
+static int __init init_kprobes(void) { for (i = 0; i &amp;lt; KPROBE_TABLE_SIZE; i++) { INIT_HLIST_HEAD(&amp;amp;kprobe_table[i]); INIT_HLIST_HEAD(&amp;amp;kretprobe_inst_table[i]); raw_spin_lock_init(&amp;amp;(kretprobe_table_locks[i].lock)); } err = populate_kprobe_blacklist(__start_kprobe_blacklist, __stop_kprobe_blacklist); ...	... err = arch_init_kprobes(); if (!err) err = register_die_notifier(&amp;amp;kprobe_exceptions_nb); if (!err) err = register_module_notifier(&amp;amp;kprobe_module_nb); ... } kprobe 实例存放在全局的hash表中，以函数的地址做hash值。
+#define KPROBE_HASH_BITS 6 #define KPROBE_TABLE_SIZE (1 &amp;lt;&amp;lt; KPROBE_HASH_BITS) static struct hlist_head kprobe_table[KPROBE_TABLE_SIZE]; struct kprobe { struct hlist_node hlist; /* list of kprobes for multi-handler support */ struct list_head list; /*count the number of times this probe was temporarily disarmed */ unsigned long nmissed; /* location of the probe point */ kprobe_opcode_t *addr; /* Allow user to indicate symbol name of the probe point */ const char *symbol_name; /* Offset into the symbol */ unsigned int offset; /* Called before addr is executed.</description></item><item><title>可观测性 kprobe ebpf</title><link>http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe-ebpf/</link><pubDate>Thu, 11 Jan 2024 00:00:00 +0000</pubDate><guid>http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe-ebpf/</guid><description>介绍 eBPF 是从 BPF（Berkeley Packet Filter）技术扩展而来，最初是为了实现快速捕获和过滤符合特定规则的网络数据包，后来这个思路受到欢迎，使得bpf不再局限于网络，成为了一项令人兴奋的新技术，它使内核编程变得灵活、安全且可供开发人员使用。
+具有以下优势：
+无需修改源代码即可使内核动态编程。 安全、快速、非常灵活且可扩展。 应用范围广，包括可观测性、网络、安全、跟踪和分析。 但是eBPF一项相当复杂的技术，具有较高的门槛，对于不懂内核和网络内部工作机制的普通开发人员来说并不容易掌握。
+所以便出现了类似于bcc、bpftrace这样致力于降低ebpf开发难度的工具。
+这两个工具不是本篇的重点。如果大家感兴趣的话，我可以在后续的ebpf专题系列中介绍。
+工作机制 ebpf程序分为用户态和内核态两部分，用户态编写的C程序由llvm转化成字节码，通过bpf系统调用把用户态ebpf程序加载并attach到指定的hook点，特定的事件触发hook执行，通过maps或者ringbuffer输出到用户态。
+对于tracing eBPF使用bpf_trace_printk() 输出到 /sys/kernel/debug/tracing/trace_pipe
+ebpf程序由内核中的事件触发，当执行某些特定的指令时，事件将会被hook捕获，并执行该hook点特定的行为动作。
+ebpf支持的事件如下图所示 对于tracing相关的hook类型有三种： kprobes、tracepoints、perf events
+BPF_PROG_TYPE_KPROBE BPF_PROG_TYPE_TRACEPOINT BPF_PROG_TYPE_PERF_EVENT ebpf的hook类型很多，在后续的ebpf系列中讲解。
+实验 编译时遇到了一些问题，在后续的ebpf系列主题中讲解。
+在__netif_receive_skb函数处打桩。 修改samples/bpf/tracex1_kern.c代码，当进入到__netif_receive_skb函数时打印一句话。
+主要的内核态代码如下
+//SEC(&amp;#34;kprobe/__netif_receive_skb_core&amp;#34;) SEC(&amp;#34;kprobe/__netif_receive_skb&amp;#34;) int bpf_prog1(struct pt_regs *ctx) { /* attaches to kprobe __netif_receive_skb_core, * looks for packets on loobpack device and prints them */ char devname[IFNAMSIZ]; struct net_device *dev; struct sk_buff *skb; int len; /* non-portable! works for the given kernel only */ bpf_probe_read_kernel(&amp;amp;skb, sizeof(skb), (void *)PT_REGS_PARM1(ctx)); dev = _(skb-&amp;gt;dev); len = _(skb-&amp;gt;len); bpf_probe_read_kernel(devname, sizeof(devname), dev-&amp;gt;name); char fmt[] = &amp;#34;im in __netif_receive_skb \n&amp;#34;; bpf_trace_printk(fmt, sizeof(fmt)); if (devname[0] == &amp;#39;l&amp;#39; &amp;amp;&amp;amp; devname[1] == &amp;#39;o&amp;#39;) { char fmt[] = &amp;#34;skb %p len %d\n&amp;#34;; /* using bpf_trace_printk() for DEBUG ONLY */ bpf_trace_printk(fmt, sizeof(fmt), skb, len); } return 0; } 用户态代码，加载ebpf程序，ping localhost 然后读取trace</description></item><item><title>可观测性 kprobe trace</title><link>http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe-trace/</link><pubDate>Thu, 11 Jan 2024 00:00:00 +0000</pubDate><guid>http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe-trace/</guid><description>介绍 kprobe event与基于追踪点的事件有点类似，它是基于kprobe。它可以使用kprobe探测任何函数(除了NOKPROBE_SYMBOL标记的黑名单函数之外)。
+同样它需要内核编译的时候配置才能启用该功能，配置项为CONFIG_KPROBE_EVENTS=y
+与ftrace其它的event tracer一样通过debugfs文件系统与用户交互，
+通过/sys/kernel/tracing/kprobe_events 或 /sys/kernel/tracing/dynamic_events 添加 Kprobes events。 通过/sys/kernel/tracing/events/kprobes/EVENT/enable启用/停止它。 通过/sys/kernel/debug/tracing/trace 查看事件。 原理 工作原理参考 可观测性 kprobe
+event 语法格式 p[:[GRP/][EVENT]] [MOD:]SYM[+offs]|MEMADDR [FETCHARGS] : Set a probe r[MAXACTIVE][:[GRP/][EVENT]] [MOD:]SYM[+0] [FETCHARGS] : Set a return probe p[:[GRP/][EVENT]] [MOD:]SYM[+0]%return [FETCHARGS] : Set a return probe -:[GRP/][EVENT] : Clear a probe GRP : Group name. If omitted, use &amp;#34;kprobes&amp;#34; for it. EVENT : Event name. If omitted, the event name is generated based on SYM+offs or MEMADDR.</description></item><item><title>可观测性 uprobe</title><link>http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7uprobe/</link><pubDate>Thu, 11 Jan 2024 00:00:00 +0000</pubDate><guid>http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7uprobe/</guid><description>介绍 uprobe是User-Level Dynamic Tracing的简称，相对于内核态的kprobe而言，它是用于跟踪用户态程序的，使用上和kprobe类似。
+使用前先检测一下内核的配置，确保CONFIG_UPROBE_EVENTS使能。
+# cat /boot/config-`uname -r` |grep CONFIG_UPROBE_EVENTS CONFIG_UPROBE_EVENTS=y 通过echo xxx &amp;gt; /sys/kernel/debug/tracing/uprobe_events 添加探测点。 使能添加的探测点echo 1 &amp;gt; /sys/kernel/debug/tracing/events/uprobes/&amp;lt;EVENT&amp;gt;/enable
+查看事件查看依然是 # cat /sys/kernel/debug/tracing/trace
+工作原理 uprobe是和kprobe类似的，我们回归一下kprobe的工作原理，理解了kprobe处理，再看uprobe就简单了。
+uprobe注册 可以通过ebpf的方式或者ftrace的方式注册uprobe，这里讲ftrace的情况，对于ebpf方式在后续的ebpf专题系列中讲解。
+init_uprobe_trace函数注册debugfs文件trace file接口 /sys/kernel/debug/tracing/uprobe_events。
+通过写入特定的格式命令到uprobe_events文件的方式注册一个uprobe，写入的内容包括程序文件索引节点、指令偏移、相关操作列表和替换指令。
+命令格式为p|r[:[GRP/][EVENT]] PATH:OFFSET[%return][(REF)] [FETCHARGS]
+命令执行时对应的调用关系如下：
+probes_write或者 --&amp;gt;create_or_delete_trace_uprobe --&amp;gt;trace_uprobe_create --&amp;gt; __trace_uprobe_create __trace_uprobe_create 创建一个 trace_uprobe 并初始化consumer.handler；
+/* * uprobe event core functions */ struct trace_uprobe { struct dyn_event	devent; struct uprobe_consumer	consumer; struct path	path; struct inode	*inode; char	*filename; unsigned long	offset; unsigned long	ref_ctr_offset; unsigned long	nhit; struct trace_probe	tp; }; struct uprobe_consumer { int (*handler)(struct uprobe_consumer *self, struct pt_regs *regs); int (*ret_handler)(struct uprobe_consumer *self, unsigned long func, struct pt_regs *regs); bool (*filter)(struct uprobe_consumer *self, enum uprobe_filter_ctx ctx, struct mm_struct *mm); struct uprobe_consumer *next; }; static struct trace_uprobe * alloc_trace_uprobe(const char *group, const char *event, int nargs, bool is_ret) { .</description></item><item><title>可观测性 USDT</title><link>http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7usdt/</link><pubDate>Thu, 11 Jan 2024 00:00:00 +0000</pubDate><guid>http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7usdt/</guid><description>介绍 USDT全称是Userland Statically Defined Tracing用户态静态定义追踪。
+USDT类似内核态的tracepoint，是静态打桩埋点方式。
+USDT在很多开源软件，如MySQL、PostgreSQL、Ruby、Python 和Node.js等都有广泛的应用。
+工作原理 首先开发人员将通过DTRACE_PROBE相关宏在程序开发过程中植入跟踪点，也就是所谓的埋点。
+其次在编译程序的时候，编译器会在目标二进制文件的ELF的.note.stapstd段部分中压制USDT追踪点。
+编译器和追踪工具之间规定，USDT的元数据所在的.note.stapstd段必须存在。
+这里的note section, 是ELF文件的一个段，以某种方式标记文件的信息，这个在后续的linux内核专题系列中会讲解。对内核感兴趣的朋友，记得关注，不要错过。
+最后USDT跟踪工具会对ELF部分进行自检，并在跟踪点的位置替换为int 3中断。当执行到跟踪点的标记处的指令时，会触发中断处理程序，并在内核中调用与uprobe关联的程序来处理事件并将它们发送到用户空间处理。
+详细处理可参考上篇的uprobe文章。
+以上便是使用USDT的工作原理和使用流程。
+实际中我们也许不是程序的开发和维护者，需要跟踪调试的时候，也许该程序已经包含了USDT探测点，或者没有，此时我们需要做个检查。
+通过上面工作原理描述，我们知道加了USDT程序埋点会出现在ELF文件的.note.stapstd段，那么我们便可以借助readelf工具来检查是否支持USDT。
+实验 安装 systemtap-sdt-dev
+# apt-get -y install systemtap-sdt-dev 编译实例程序
+#include &amp;lt;sys/sdt.h&amp;gt; #include &amp;lt;sys/time.h&amp;gt; #include &amp;lt;unistd.h&amp;gt; int main(int argc, char ** argv) { struct timeval tv; for(int x; x &amp;lt; 1024; x++) { gettimeofday(&amp;amp;tv, NULL); DTRACE_PROBE2(test_app, test_probe, tv.tv_sec, x); sleep(1); } return 0; } 查看.note.stapsdt段信息，可以看到有埋点的详细信息Displaying notes found in: .note.stapsdt。</description></item><item><title>可观测性 User-Level Tracing</title><link>http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7%E6%80%A7user-level-tracing/</link><pubDate>Thu, 11 Jan 2024 00:00:00 +0000</pubDate><guid>http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7%E6%80%A7user-level-tracing/</guid><description>序言 tracing分为两种实现方案：
+静态追踪，即静态探针。 动态追踪，动态探针。 静态追踪包括内核态的tracepoint、用户态的USTD；动态追踪有内核态kprobe、kretprobe、ftrace, 用户态的uprobe、uretprobe。
+kprobe与kretprobe的区别在于kprobe追踪函数调用、kretprobe是追踪函数返回值。同理uprobe与uretprobe也是一样的区别。
+前面章节讲解的可观测性技术都是内核态的，但是大部分的业务应用都是在用户态的，用户、开发不关心内核态的东西。
+那么用户态程序的可观测性是否有成熟的技术方案呢？
+答案是有的。
+介绍 用户态程序追踪有两种技术方案：
+USDT uprobe USTD是静态追踪方案；uprobe是动态追踪方案。
+两种方案各有千秋不存在谁比谁好的问题，只有谁更合适的问题。
+uprobe是使用上比较方便，除了需要程序符号表可访问之外，不需要其它额外的事情，比较通用。
+USDT则需要在程序编译的时候打桩埋点，可以理解为在程序处理流程的关键位置增加debug日志信息。
+对于新的大型项目开发而言，使用USDT方案会更好一些，不仅仅是方便开发调试，更利于上线之后的产品运营，因为它的比写debug日志性能要好。
+后面会介绍两个工程化落地比较好的案例。
+记得关注，别错过了后续文章。
+为了方便合作洽谈、交流，有需要可以加微信。
+有云原生安全、可观测性的岗位也欢迎推荐。
+参考 https://www.cnxct.com/ebpf-uprobe-userspace-app/</description></item><item><title/><link>http://www.ebpflab.com/about/</link><pubDate>Wed, 10 Jan 2024 00:00:00 +0000</pubDate><guid>http://www.ebpflab.com/about/</guid><description>eBPFLAB专注eBPF创新技术
 致力于推动eBPF创新技术在国内发展及落地。
 Learn more and contribute on GitHub.</description></item><item><title/><link>http://www.ebpflab.com/posts/start-post/</link><pubDate>Wed, 10 Jan 2024 00:00:00 +0000</pubDate><guid>http://www.ebpflab.com/posts/start-post/</guid><description>这是一篇测试文章，欢迎来到eBPFLAB eBPFLAB专注eBPF创新技术。</description></item><item><title/><link>http://www.ebpflab.com/contact/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>http://www.ebpflab.com/contact/</guid><description>联系我, 邀你加入eBPF云原生实验室交流群.</description></item></channel></rss>

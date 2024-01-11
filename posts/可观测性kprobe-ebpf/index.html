@@ -1,0 +1,115 @@
+<!doctype html><html lang=zh-cn><head><title>eBPFLAB 专注eBPF创新技术 | 可观测性 kprobe ebpf</title>
+<meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,minimum-scale=1"><link rel=apple-touch-icon sizes=180x180 href=/favicon/apple-touch-icon.png><link rel=icon type=image/png sizes=32x32 href=/favicon/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon/favicon-16x16.png><link rel=manifest href=/favicon/site.webmanifest><link rel=mask-icon href=/favicon/safari-pinned-tab.svg color=#5bbad5><link rel="shortcut icon" href=/favicon/favicon.ico><meta name=theme-color content="#ffffff"><meta property="og:title" content="eBPFLAB 专注eBPF创新技术 | 可观测性 kprobe ebpf"><link rel=stylesheet href="/css/style.min.92245c3bd27417eb98c54b8447892fefe1c95449620cd8cb92b17d11b1313a9e.css"><link href=/css/blonde.min.css rel=stylesheet type=text/css media=print onload='this.media=" all"'><meta name=description content="eBPFLAB 专注eBPF创新技术"><meta property="og:site_name" content="eBPFLAB 专注eBPF创新技术"><meta property="og:description" content="eBPFLAB 专注eBPF创新技术"><meta property="og:url" content="http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe-ebpf/"><meta property="og:type" content="website"><meta property="og:locale" content="en_US"><meta name=twitter:card content="summary_large_image"><meta name=twitter:site content><link rel=canonical href=http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe-ebpf/><meta name=twitter:description content="eBPFLAB 专注eBPF创新技术"><meta property="article:published_time" content="2024-01-11T00:00:00+00:00"><meta property="article:updated_time" content="2024-01-11T00:00:00+00:00"><meta property="og:image" content="http://www.ebpflab.com/"><meta property="og:image:url" content="http://www.ebpflab.com/"><link rel=stylesheet href=/css/custom.css><i class="dark hidden"></i></head><body class=font-sans><div class="min-h-screen flex flex-col bg-gray-100 dark:bg-warmgray-800"><div class=bg-gray-800><div class="container max-w-screen-xl mr-auto ml-auto"><nav class="flex items-center justify-between flex-wrap bg-gray-800 p-6"><div class="flex items-center flex-no-shrink bg-gray-800 text-white mr-6"><a href=http://www.ebpflab.com/><span class="font-semibold text-2xl tracking-tight">eBPFLAB 专注eBPF创新技术</span></a></div><div class="flex md:hidden"><div class=py-2><button onclick=toggleDarkMode() class="focus:outline-none mr-1" aria-label="Darkmode Toggle Button"><i id=icon class="icon-moon inline-flex align-middle leading-normal text-lg text-white"></i></button>
+<span class=text-white>|</span></div><button id=hamburgerbtn class="flex items-center px-3 py-1 text-white hover:opacity-50" aria-label="Hamburger Button">
+<span class="icon-menu text-2xl"></span></button></div><div class="hidden w-full md:flex md:flex-row sm:items-center md:w-auto" id=mobileMenu><div class="text-sm lg:flex-grow"></div><div class=navmenu><a href=/ class="no-underline duration-200 block mt-4 sm:inline-block sm:mt-0 text-white hover:opacity-50 mr-4">首页
+</a><a href=/about/ class="no-underline duration-200 block mt-4 sm:inline-block sm:mt-0 text-white hover:opacity-50 mr-4">关于
+</a><a href=/contact/ class="no-underline duration-200 block mt-4 sm:inline-block sm:mt-0 text-white hover:opacity-50 mr-4">联系方式</a></div><div class="text-white invisible md:visible"><span>|</span>
+<button onclick=toggleDarkMode() class=focus-visible:outline-none aria-label="Darkmode Toggle Button"><i id=icon2 class="icon-moon hover:opacity-50 duration-200 inline-flex align-middle leading-normal text-lg ml-2"></i></button></div></div></nav></div></div><style>.active{display:block}</style><script>let hamburger=document.getElementById("hamburgerbtn"),mobileMenu=document.getElementById("mobileMenu");hamburger.addEventListener("click",function(){mobileMenu.classList.toggle("active")})</script><div class="container max-w-screen-xl mx-auto mt-4 flex-grow px-5 lg:px-0" id=content><div class=lg:mx-5><div class="grid grid-cols-3 gap-4"><div class="bg-white col-span-3 lg:col-span-2 p-5 dark:bg-warmgray-900 dark:text-white"><h1 class="title text-4xl font-bold mb-2">可观测性 kprobe ebpf</h1><div class="content prose md:prose-lg lg:prose-xl max-w-none dark:prose-invert py-1"><hr><h2 id=介绍>介绍</h2><p>eBPF 是从 BPF（Berkeley Packet Filter）技术扩展而来，最初是为了实现快速捕获和过滤符合特定规则的网络数据包，后来这个思路受到欢迎，使得bpf不再局限于网络，成为了一项令人兴奋的新技术，它使内核编程变得灵活、安全且可供开发人员使用。</p><p>具有以下优势：</p><ol><li>无需修改源代码即可使内核动态编程。</li><li>安全、快速、非常灵活且可扩展。</li><li>应用范围广，包括可观测性、网络、安全、跟踪和分析。</li></ol><p>但是eBPF一项相当复杂的技术，具有较高的门槛，对于不懂内核和网络内部工作机制的普通开发人员来说并不容易掌握。</p><p>所以便出现了类似于bcc、bpftrace这样致力于降低ebpf开发难度的工具。</p><p>这两个工具不是本篇的重点。如果大家感兴趣的话，我可以在后续的ebpf专题系列中介绍。</p><h2 id=工作机制>工作机制</h2><p>ebpf程序分为用户态和内核态两部分，用户态编写的C程序由llvm转化成字节码，通过bpf系统调用把用户态ebpf程序加载并attach到指定的hook点，特定的事件触发hook执行，通过maps或者ringbuffer输出到用户态。</p><p>对于tracing eBPF使用<code>bpf_trace_printk()</code> 输出到 <code>/sys/kernel/debug/tracing/trace_pipe</code></p><p><img src=/images/image-1.png alt="Alt text"></p><p>ebpf程序由内核中的事件触发，当执行某些特定的指令时，事件将会被hook捕获，并执行该hook点特定的行为动作。</p><p>ebpf支持的事件如下图所示
+<img src=/images/image-2.png alt="Alt text"></p><p>对于tracing相关的hook类型有三种：
+<code>kprobes、tracepoints、perf events</code></p><ol><li>BPF_PROG_TYPE_KPROBE</li><li>BPF_PROG_TYPE_TRACEPOINT</li><li>BPF_PROG_TYPE_PERF_EVENT</li></ol><p>ebpf的hook类型很多，在后续的ebpf系列中讲解。</p><h2 id=实验>实验</h2><p>编译时遇到了一些问题，在后续的ebpf系列主题中讲解。</p><p>在<code>__netif_receive_skb</code>函数处打桩。
+修改samples/bpf/tracex1_kern.c代码，当进入到__netif_receive_skb函数时打印一句话。</p><p>主要的内核态代码如下</p><pre tabindex=0><code>//SEC(&#34;kprobe/__netif_receive_skb_core&#34;)
+SEC(&#34;kprobe/__netif_receive_skb&#34;)
+int bpf_prog1(struct pt_regs *ctx)
+{
+        /* attaches to kprobe __netif_receive_skb_core,
+         * looks for packets on loobpack device and prints them
+         */
+        char devname[IFNAMSIZ];
+        struct net_device *dev;
+        struct sk_buff *skb;
+        int len;
+
+        /* non-portable! works for the given kernel only */
+        bpf_probe_read_kernel(&amp;skb, sizeof(skb), (void *)PT_REGS_PARM1(ctx));
+        dev = _(skb-&gt;dev);
+        len = _(skb-&gt;len);
+
+        bpf_probe_read_kernel(devname, sizeof(devname), dev-&gt;name);
+
+        char fmt[] = &#34;im in __netif_receive_skb \n&#34;;
+        bpf_trace_printk(fmt, sizeof(fmt));
+
+        if (devname[0] == &#39;l&#39; &amp;&amp; devname[1] == &#39;o&#39;) {
+                char fmt[] = &#34;skb %p len %d\n&#34;;
+                /* using bpf_trace_printk() for DEBUG ONLY */
+                bpf_trace_printk(fmt, sizeof(fmt), skb, len);
+        }
+
+        return 0;
+}
+</code></pre><p>用户态代码，加载ebpf程序，ping localhost 然后读取trace</p><pre tabindex=0><code>int main(int ac, char **argv)
+{
+        struct bpf_link *link = NULL;
+        struct bpf_program *prog;
+        struct bpf_object *obj;
+        char filename[256];
+        FILE *f;
+
+        snprintf(filename, sizeof(filename), &#34;%s_kern.o&#34;, argv[0]);
+        obj = bpf_object__open_file(filename, NULL);
+        if (libbpf_get_error(obj)) {
+                fprintf(stderr, &#34;ERROR: opening BPF object file failed\n&#34;);
+                return 0;
+        }
+
+        prog = bpf_object__find_program_by_name(obj, &#34;bpf_prog1&#34;);
+        if (!prog) {
+                fprintf(stderr, &#34;ERROR: finding a prog in obj file failed\n&#34;);
+                goto cleanup;
+        }
+
+        /* load BPF program */
+        if (bpf_object__load(obj)) {
+                fprintf(stderr, &#34;ERROR: loading BPF object file failed\n&#34;);
+                goto cleanup;
+        }
+
+        link = bpf_program__attach(prog);
+        if (libbpf_get_error(link)) {
+                fprintf(stderr, &#34;ERROR: bpf_program__attach failed\n&#34;);
+                link = NULL;
+                goto cleanup;
+        }
+
+        f = popen(&#34;taskset 1 ping -c5 localhost&#34;, &#34;r&#34;);
+        (void) f;
+
+        read_trace_pipe();
+
+cleanup:
+        bpf_link__destroy(link);
+        bpf_object__close(obj);
+        return 0;
+}
+</code></pre><p>编译</p><pre tabindex=0><code># make VMLINUX_BTF=/sys/kernel/btf/vmlinux -C samples/bpf
+</code></pre><p>运行</p><pre tabindex=0><code># ./tracex1 tracex1
+samples/bpf# ./tracex1 tracex1
+            ping-65965   [000] d.s41  7464.353130: bpf_trace_printk: im in __netif_receive_skb
+
+            ping-65965   [000] dNs41  7464.353147: bpf_trace_printk: im in __netif_receive_skb
+
+
+            ping-65965   [000] d.s41  7465.384240: bpf_trace_printk: im in __netif_receive_skb
+
+            ping-65965   [000] d.s41  7465.384315: bpf_trace_printk: im in __netif_receive_skb
+
+
+            ping-65965   [000] d.s41  7466.408695: bpf_trace_printk: im in __netif_receive_skb
+
+            ping-65965   [000] d.s41  7466.408801: bpf_trace_printk: im in __netif_receive_skb
+
+
+            ping-65965   [000] d.s41  7467.432237: bpf_trace_printk: im in __netif_receive_skb
+
+            ping-65965   [000] d.s41  7467.432342: bpf_trace_printk: im in __netif_receive_skb
+
+
+            ping-65965   [000] d.s41  7468.455720: bpf_trace_printk: im in __netif_receive_skb
+
+            ping-65965   [000] d.s41  7468.455756: bpf_trace_printk: im in __netif_receive_skb
+</code></pre><h2 id=参考>参考</h2><p><a href=https://lwn.net/Articles/740157/>https://lwn.net/Articles/740157/</a>
+samples/bpf/
+Kernel Tracing With eBPF</p></div></div><div class="hidden lg:block lg:col-span-1"><div class=mb-3><form class=widget-search__form role=search method=get action=https://google.com/search><label><input class="w-full p-3 focus:outline-none dark:bg-warmgray-900 dark:text-white placeholder-gray-700 dark:placeholder-gray-300" type=search placeholder=Search... name=q aria-label=Search>
+</label><input class=hidden type=submit value=Search>
+<input type=hidden name=sitesearch value=http://www.ebpflab.com/></form></div><div class="bg-white panel mb-3 pb-5 dark:bg-warmgray-900"><p class="text-xl text-center text-gray-700 py-3 px-3 dark:text-gray-300 font-bold">Archives</p></div><div class="bg-white panel mb-3 pb-5 dark:bg-warmgray-900"><p class="text-xl text-center text-gray-700 py-5 dark:text-gray-300 font-bold">Categories</p><a class="text-center block duration-100 py-2 px-4 mx-4 hover:bg-gray-100 text-gray-800 dark:text-gray-200 dark:hover:bg-warmgray-800" href=http://www.ebpflab.com//categories/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7>可观测性</a></div><div class="bg-white panel mb-3 pb-5 dark:bg-warmgray-900"><p class="text-xl text-center text-gray-700 py-5 dark:text-gray-300 font-bold">Recent Posts</p><div class=mx-6><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7ftrace/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 ftrace</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 kprobe</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe-ebpf/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 kprobe ebpf</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe-trace/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 kprobe trace</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7uprobe/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 uprobe</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a></div></div></div></div></div></div><footer class="bg-gray-800 text-white p-6"><div class="container max-w-screen-xl mr-auto ml-auto"><p>&copy; 2024 <a href=http://www.ebpflab.com/ class="duration-200 hover:opacity-50">eBPFLAB 专注eBPF创新技术</a></p><p>Powered by <a href=https://gohugo.io/ class="duration-200 hover:opacity-50">Hugo</a>, Theme <a href=https://github.com/opera7133/Blonde class="duration-200 hover:opacity-50">Blonde</a>.
+Copyright &copy; eBPFLAB <a href=https://beian.miit.gov.cn/#/Integrated/index class="duration-200 hover:opacity-50">京ICP备2024042531号-1</a></p></div><script>var icon=document.getElementById("icon"),icon2=document.getElementById("icon2");document.documentElement.classList.contains("dark")||localStorage.theme==="dark"||!("theme"in localStorage)&&window.matchMedia("(prefers-color-scheme: dark)").matches?(icon.classList.remove("icon-moon"),icon.classList.add("icon-sun"),icon2.classList.remove("icon-moon"),icon2.classList.add("icon-sun"),document.documentElement.classList.add("dark")):document.documentElement.classList.remove("dark");function toggleDarkMode(){document.documentElement.classList.contains("dark")?(icon.classList.remove("icon-sun"),icon.classList.add("icon-moon"),icon2.classList.remove("icon-sun"),icon2.classList.add("icon-moon"),document.documentElement.classList.remove("dark"),localStorage.theme="light"):(icon.classList.remove("icon-moon"),icon.classList.add("icon-sun"),icon2.classList.remove("icon-moon"),icon2.classList.add("icon-sun"),document.documentElement.classList.add("dark"),localStorage.theme="dark")}</script></footer></div></body></html>

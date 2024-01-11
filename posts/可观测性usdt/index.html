@@ -1,0 +1,143 @@
+<!doctype html><html lang=zh-cn><head><title>eBPFLAB 专注eBPF创新技术 | 可观测性 USDT</title>
+<meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,minimum-scale=1"><link rel=apple-touch-icon sizes=180x180 href=/favicon/apple-touch-icon.png><link rel=icon type=image/png sizes=32x32 href=/favicon/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon/favicon-16x16.png><link rel=manifest href=/favicon/site.webmanifest><link rel=mask-icon href=/favicon/safari-pinned-tab.svg color=#5bbad5><link rel="shortcut icon" href=/favicon/favicon.ico><meta name=theme-color content="#ffffff"><meta property="og:title" content="eBPFLAB 专注eBPF创新技术 | 可观测性 USDT"><link rel=stylesheet href="/css/style.min.92245c3bd27417eb98c54b8447892fefe1c95449620cd8cb92b17d11b1313a9e.css"><link href=/css/blonde.min.css rel=stylesheet type=text/css media=print onload='this.media=" all"'><meta name=description content="eBPFLAB 专注eBPF创新技术"><meta property="og:site_name" content="eBPFLAB 专注eBPF创新技术"><meta property="og:description" content="eBPFLAB 专注eBPF创新技术"><meta property="og:url" content="http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7usdt/"><meta property="og:type" content="website"><meta property="og:locale" content="en_US"><meta name=twitter:card content="summary_large_image"><meta name=twitter:site content><link rel=canonical href=http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7usdt/><meta name=twitter:description content="eBPFLAB 专注eBPF创新技术"><meta property="article:published_time" content="2024-01-11T00:00:00+00:00"><meta property="article:updated_time" content="2024-01-11T00:00:00+00:00"><meta property="og:image" content="http://www.ebpflab.com/"><meta property="og:image:url" content="http://www.ebpflab.com/"><link rel=stylesheet href=/css/custom.css><i class="dark hidden"></i></head><body class=font-sans><div class="min-h-screen flex flex-col bg-gray-100 dark:bg-warmgray-800"><div class=bg-gray-800><div class="container max-w-screen-xl mr-auto ml-auto"><nav class="flex items-center justify-between flex-wrap bg-gray-800 p-6"><div class="flex items-center flex-no-shrink bg-gray-800 text-white mr-6"><a href=http://www.ebpflab.com/><span class="font-semibold text-2xl tracking-tight">eBPFLAB 专注eBPF创新技术</span></a></div><div class="flex md:hidden"><div class=py-2><button onclick=toggleDarkMode() class="focus:outline-none mr-1" aria-label="Darkmode Toggle Button"><i id=icon class="icon-moon inline-flex align-middle leading-normal text-lg text-white"></i></button>
+<span class=text-white>|</span></div><button id=hamburgerbtn class="flex items-center px-3 py-1 text-white hover:opacity-50" aria-label="Hamburger Button">
+<span class="icon-menu text-2xl"></span></button></div><div class="hidden w-full md:flex md:flex-row sm:items-center md:w-auto" id=mobileMenu><div class="text-sm lg:flex-grow"></div><div class=navmenu><a href=/ class="no-underline duration-200 block mt-4 sm:inline-block sm:mt-0 text-white hover:opacity-50 mr-4">首页
+</a><a href=/about/ class="no-underline duration-200 block mt-4 sm:inline-block sm:mt-0 text-white hover:opacity-50 mr-4">关于
+</a><a href=/contact/ class="no-underline duration-200 block mt-4 sm:inline-block sm:mt-0 text-white hover:opacity-50 mr-4">联系方式</a></div><div class="text-white invisible md:visible"><span>|</span>
+<button onclick=toggleDarkMode() class=focus-visible:outline-none aria-label="Darkmode Toggle Button"><i id=icon2 class="icon-moon hover:opacity-50 duration-200 inline-flex align-middle leading-normal text-lg ml-2"></i></button></div></div></nav></div></div><style>.active{display:block}</style><script>let hamburger=document.getElementById("hamburgerbtn"),mobileMenu=document.getElementById("mobileMenu");hamburger.addEventListener("click",function(){mobileMenu.classList.toggle("active")})</script><div class="container max-w-screen-xl mx-auto mt-4 flex-grow px-5 lg:px-0" id=content><div class=lg:mx-5><div class="grid grid-cols-3 gap-4"><div class="bg-white col-span-3 lg:col-span-2 p-5 dark:bg-warmgray-900 dark:text-white"><h1 class="title text-4xl font-bold mb-2">可观测性 USDT</h1><div class="content prose md:prose-lg lg:prose-xl max-w-none dark:prose-invert py-1"><hr><h2 id=介绍>介绍</h2><p>USDT全称是Userland Statically Defined Tracing用户态静态定义追踪。</p><p>USDT类似内核态的tracepoint，是静态打桩埋点方式。</p><p>USDT在很多开源软件，如MySQL、PostgreSQL、Ruby、Python 和Node.js等都有广泛的应用。</p><h2 id=工作原理>工作原理</h2><p>首先开发人员将通过<code>DTRACE_PROBE</code>相关宏在程序开发过程中植入跟踪点，也就是所谓的埋点。</p><p>其次在编译程序的时候，编译器会在目标二进制文件的ELF的.note.stapstd段部分中压制USDT追踪点。</p><p>编译器和追踪工具之间规定，USDT的元数据所在的.note.stapstd段必须存在。</p><p><img src=/images/image-4.png alt="Alt text">
+这里的note section, 是ELF文件的一个段，以某种方式标记文件的信息，这个在后续的<code>linux内核专题系列</code>中会讲解。对内核感兴趣的朋友，记得关注，不要错过。</p><p>最后USDT跟踪工具会对ELF部分进行自检，并在跟踪点的位置替换为int 3中断。当执行到跟踪点的标记处的指令时，会触发中断处理程序，并在内核中调用与uprobe关联的程序来处理事件并将它们发送到用户空间处理。</p><p>详细处理可参考上篇的uprobe文章。</p><p>以上便是使用USDT的工作原理和使用流程。</p><p>实际中我们也许不是程序的开发和维护者，需要跟踪调试的时候，也许该程序已经包含了USDT探测点，或者没有，此时我们需要做个检查。</p><p>通过上面工作原理描述，我们知道加了USDT程序埋点会出现在ELF文件的.note.stapstd段，那么我们便可以借助readelf工具来检查是否支持USDT。</p><h2 id=实验>实验</h2><p>安装 systemtap-sdt-dev</p><pre tabindex=0><code># apt-get -y install systemtap-sdt-dev
+</code></pre><p>编译实例程序</p><pre tabindex=0><code>#include &lt;sys/sdt.h&gt;
+#include &lt;sys/time.h&gt;
+#include &lt;unistd.h&gt;
+
+int main(int argc, char ** argv)
+{
+        struct timeval tv;
+
+        for(int x; x &lt; 1024; x++) {
+                gettimeofday(&amp;tv, NULL);
+                DTRACE_PROBE2(test_app, test_probe, tv.tv_sec, x);
+                sleep(1);
+        }
+
+        return 0;
+}
+</code></pre><p>查看.note.stapsdt段信息，可以看到有埋点的详细信息<code>Displaying notes found in: .note.stapsdt</code>。</p><pre tabindex=0><code># readelf -n a.out
+
+Displaying notes found in: .note.gnu.property
+  Owner                Data size        Description
+  GNU                  0x00000020       NT_GNU_PROPERTY_TYPE_0
+      Properties: x86 feature: IBT, SHSTK
+        x86 ISA needed: x86-64-baseline
+
+Displaying notes found in: .note.gnu.build-id
+  Owner                Data size        Description
+  GNU                  0x00000014       NT_GNU_BUILD_ID (unique build ID bitstring)
+    Build ID: 50d9916129f0b28c92defa0c5a1368ae731e42a0
+
+Displaying notes found in: .note.ABI-tag
+  Owner                Data size        Description
+  GNU                  0x00000010       NT_GNU_ABI_TAG (ABI version tag)
+    OS: Linux, ABI: 3.2.0
+
+Displaying notes found in: .note.stapsdt
+  Owner                Data size        Description
+  stapsdt              0x00000041       NT_STAPSDT (SystemTap probe descriptors)
+    Provider: test_app
+    Name: test_probe
+    Location: 0x00000000000011c2, Base: 0x0000000000002004, Semaphore: 0x0000000000000000
+    Arguments: -8@%rax -4@-36(%rbp)
+g#
+</code></pre><p>查看汇编代码,可以发现<code>DTRACE_PROBE2</code>被替换为了NOP指令。</p><pre tabindex=0><code># objdump -d a.out
+0000000000001189 &lt;main&gt;:
+    1189:       f3 0f 1e fa             endbr64
+    118d:       55                      push   %rbp
+    118e:       48 89 e5                mov    %rsp,%rbp
+    1191:       48 83 ec 40             sub    $0x40,%rsp
+    1195:       89 7d cc                mov    %edi,-0x34(%rbp)
+    1198:       48 89 75 c0             mov    %rsi,-0x40(%rbp)
+    119c:       64 48 8b 04 25 28 00    mov    %fs:0x28,%rax
+    11a3:       00 00
+    11a5:       48 89 45 f8             mov    %rax,-0x8(%rbp)
+    11a9:       31 c0                   xor    %eax,%eax
+    11ab:       eb 24                   jmp    11d1 &lt;main+0x48&gt;
+    11ad:       48 8d 45 e0             lea    -0x20(%rbp),%rax
+    11b1:       be 00 00 00 00          mov    $0x0,%esi
+    11b6:       48 89 c7                mov    %rax,%rdi
+    11b9:       e8 c2 fe ff ff          call   1080 &lt;gettimeofday@plt&gt;
+    11be:       48 8b 45 e0             mov    -0x20(%rbp),%rax
+    11c2:       90                      nop
+    11c3:       bf 01 00 00 00          mov    $0x1,%edi
+    11c8:       e8 c3 fe ff ff          call   1090 &lt;sleep@plt&gt;
+    11cd:       83 45 dc 01             addl   $0x1,-0x24(%rbp)
+    11d1:       81 7d dc ff 03 00 00    cmpl   $0x3ff,-0x24(%rbp)
+    11d8:       7e d3                   jle    11ad &lt;main+0x24&gt;
+    11da:       b8 00 00 00 00          mov    $0x0,%eax
+    11df:       48 8b 55 f8             mov    -0x8(%rbp),%rdx
+    11e3:       64 48 2b 14 25 28 00    sub    %fs:0x28,%rdx
+    11ea:       00 00
+    11ec:       74 05                   je     11f3 &lt;main+0x6a&gt;
+    11ee:       e8 7d fe ff ff          call   1070 &lt;__stack_chk_fail@plt&gt;
+    11f3:       c9                      leave
+    11f4:       c3                      ret
+</code></pre><p>增加探测点，我们这次使用tracing的一个前端工具perf跟ftrace做个对比。</p><ol><li><p>使用perf工具</p><pre tabindex=0><code># perf buildid-cache --add ./a.out
+# perf list |grep sdt
+sdt_test_app:test_probe                            [SDT event]
+# perf probe --add=sdt_test_app:test_probe
+Added new event:
+sdt_test_app:test_probe (on %test_probe in /code/tracing/a.out)
+
+You can now use it in all perf tools, such as:
+
+        perf record -e sdt_test_app:test_probe -aR sleep 1
+</code></pre><p>通过ftrace的debugfs接口查看，已经有uprobe event了，也就是perf工具增加的探测点事件。</p><pre tabindex=0><code>cat /sys/kernel/debug/tracing/uprobe_events
+p:sdt_test_app/test_probe /code/tracing/a.out:0x00000000000011c2 arg1=%ax:s64 arg2=-36(%bp):s32
+</code></pre><p>统计探测的事件记录，之前工作中都是源码编译的perf，这里偷懒从官方源下载了perf。perf record时遇到了一个问题，属于官方源的一个坑。在后续的可观测性工具篇幅中详细讲解。</p><pre tabindex=0><code># perf record -e sdt_test_app:test_probe -p $(pidof ./a.out) sleep 10
+[ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 0.013 MB perf.data (10 samples) ]
+</code></pre><p>查看record报告</p><pre tabindex=0><code># perf script
+        a.out 13209 [000] 135040.744146: sdt_test_app:test_probe: (55ca15c371c2) arg1=1699891733 arg2=845
+        a.out 13209 [000] 135041.744866: sdt_test_app:test_probe: (55ca15c371c2) arg1=1699891734 arg2=846
+        a.out 13209 [000] 135042.746374: sdt_test_app:test_probe: (55ca15c371c2) arg1=1699891735 arg2=847
+        a.out 13209 [000] 135043.746716: sdt_test_app:test_probe: (55ca15c371c2) arg1=1699891736 arg2=848
+        a.out 13209 [000] 135044.749240: sdt_test_app:test_probe: (55ca15c371c2) arg1=1699891737 arg2=849
+        a.out 13209 [000] 135045.750033: sdt_test_app:test_probe: (55ca15c371c2) arg1=1699891738 arg2=850
+        a.out 13209 [000] 135046.750779: sdt_test_app:test_probe: (55ca15c371c2) arg1=1699891739 arg2=851
+        a.out 13209 [000] 135047.751260: sdt_test_app:test_probe: (55ca15c371c2) arg1=1699891740 arg2=852
+        a.out 13209 [000] 135048.751595: sdt_test_app:test_probe: (55ca15c371c2) arg1=1699891741 arg2=853
+        a.out 13209 [000] 135049.753703: sdt_test_app:test_probe: (55ca15c371c2) arg1=1699891742 arg2=854
+</code></pre></li><li><p>操作ftrace的debugfs接口</p><p>增加探测点</p><pre tabindex=0><code># echo &#39;p:test_usdt ./a.out:0x11c2&#39; &gt; /sys/kernel/debug/tracing/uprobe_events
+0x11c2 即实例程序反汇编看到的nop指令地址，也就是增加的埋点处地址。
+</code></pre><p>激活探测点</p><pre tabindex=0><code># echo 1 &gt; /sys/kernel/debug/tracing/events/uprobes/test_usdt/enable
+</code></pre><p>查看trace</p><pre tabindex=0><code># cat /sys/kernel/debug/tracing/trace
+# tracer: nop
+#
+# entries-in-buffer/entries-written: 4/4   #P:2
+#
+#                                _-----=&gt; irqs-off/BH-disabled
+#                               / _----=&gt; need-resched
+#                              | / _---=&gt; hardirq/softirq
+#                              || / _--=&gt; preempt-depth
+#                              ||| / _-=&gt; migrate-disable
+#                              |||| /     delay
+#           TASK-PID     CPU#  |||||  TIMESTAMP  FUNCTION
+#              | |         |   |||||     |         |
+        a.out-19260   [000] DNZff 136227.665453: test_usdt: (0x560ec73191c2)
+        a.out-19260   [000] DNZff 136228.666249: test_usdt: (0x560ec73191c2)
+        a.out-19260   [000] DNZff 136229.666713: test_usdt: (0x560ec73191c2)
+        a.out-19260   [000] DNZff 136230.669335: test_usdt: (0x560ec73191c2)
+</code></pre></li></ol><p>可以看到使用前端工具与操作ftrace的debugfs是一样的效果，这些前端工具方便做跟踪操作，提高效率。</p><p>前端工具有很多，后面会调几个介绍如何使用。关注公众号，不要错过。</p><h2 id=参考>参考</h2><p><a href=https://www.brendangregg.com/blog/2015-06-28/linux-ftrace-uprobe.html>https://www.brendangregg.com/blog/2015-06-28/linux-ftrace-uprobe.html</a>
+<a href=https://installati.one/install-systemtap-sdt-dev-ubuntu-22-04/>https://installati.one/install-systemtap-sdt-dev-ubuntu-22-04/</a>
+<a href=https://www.openvswitch.org/support/ovscon2021/slides/debugging_using_tracepoints.pdf>https://www.openvswitch.org/support/ovscon2021/slides/debugging_using_tracepoints.pdf</a>
+<a href=https://medium.com/@yunwei356/ebpf-tutorial-by-example-15-capturing-user-space-java-gc-event-duration-using-usdt-46436f772ce8>https://medium.com/@yunwei356/ebpf-tutorial-by-example-15-capturing-user-space-java-gc-event-duration-using-usdt-46436f772ce8</a>
+<a href=https://docs.openvswitch.org/en/latest/topics/usdt-probes/>https://docs.openvswitch.org/en/latest/topics/usdt-probes/</a>
+<a href=https://www.openvswitch.org/support/ovscon2021/slides/debugging_using_tracepoints.pdf>https://www.openvswitch.org/support/ovscon2021/slides/debugging_using_tracepoints.pdf</a>
+<a href=https://bugs.archlinux.org/task/77826>https://bugs.archlinux.org/task/77826</a>
+<a href=https://docs.frrouting.org/projects/dev-guide/en/latest/tracing.html>https://docs.frrouting.org/projects/dev-guide/en/latest/tracing.html</a>
+<a href=https://opeonikute.dev/posts/observing-node-with-ebpf>https://opeonikute.dev/posts/observing-node-with-ebpf</a>
+<a href=https://lists.iovisor.org/g/iovisor-dev/topic/how_to_use_usdt_probes/21386285>https://lists.iovisor.org/g/iovisor-dev/topic/how_to_use_usdt_probes/21386285</a>
+<a href=https://docs.rs/usdt/latest/usdt/>https://docs.rs/usdt/latest/usdt/</a>
+<a href=https://www.brendangregg.com/blog/2015-07-03/hacking-linux-usdt-ftrace.html>https://www.brendangregg.com/blog/2015-07-03/hacking-linux-usdt-ftrace.html</a></p></div></div><div class="hidden lg:block lg:col-span-1"><div class=mb-3><form class=widget-search__form role=search method=get action=https://google.com/search><label><input class="w-full p-3 focus:outline-none dark:bg-warmgray-900 dark:text-white placeholder-gray-700 dark:placeholder-gray-300" type=search placeholder=Search... name=q aria-label=Search>
+</label><input class=hidden type=submit value=Search>
+<input type=hidden name=sitesearch value=http://www.ebpflab.com/></form></div><div class="bg-white panel mb-3 pb-5 dark:bg-warmgray-900"><p class="text-xl text-center text-gray-700 py-3 px-3 dark:text-gray-300 font-bold">Archives</p></div><div class="bg-white panel mb-3 pb-5 dark:bg-warmgray-900"><p class="text-xl text-center text-gray-700 py-5 dark:text-gray-300 font-bold">Categories</p><a class="text-center block duration-100 py-2 px-4 mx-4 hover:bg-gray-100 text-gray-800 dark:text-gray-200 dark:hover:bg-warmgray-800" href=http://www.ebpflab.com//categories/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7>可观测性</a></div><div class="bg-white panel mb-3 pb-5 dark:bg-warmgray-900"><p class="text-xl text-center text-gray-700 py-5 dark:text-gray-300 font-bold">Recent Posts</p><div class=mx-6><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7ftrace/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 ftrace</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 kprobe</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe-ebpf/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 kprobe ebpf</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe-trace/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 kprobe trace</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7uprobe/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 uprobe</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a></div></div></div></div></div></div><footer class="bg-gray-800 text-white p-6"><div class="container max-w-screen-xl mr-auto ml-auto"><p>&copy; 2024 <a href=http://www.ebpflab.com/ class="duration-200 hover:opacity-50">eBPFLAB 专注eBPF创新技术</a></p><p>Powered by <a href=https://gohugo.io/ class="duration-200 hover:opacity-50">Hugo</a>, Theme <a href=https://github.com/opera7133/Blonde class="duration-200 hover:opacity-50">Blonde</a>.
+Copyright &copy; eBPFLAB <a href=https://beian.miit.gov.cn/#/Integrated/index class="duration-200 hover:opacity-50">京ICP备2024042531号-1</a></p></div><script>var icon=document.getElementById("icon"),icon2=document.getElementById("icon2");document.documentElement.classList.contains("dark")||localStorage.theme==="dark"||!("theme"in localStorage)&&window.matchMedia("(prefers-color-scheme: dark)").matches?(icon.classList.remove("icon-moon"),icon.classList.add("icon-sun"),icon2.classList.remove("icon-moon"),icon2.classList.add("icon-sun"),document.documentElement.classList.add("dark")):document.documentElement.classList.remove("dark");function toggleDarkMode(){document.documentElement.classList.contains("dark")?(icon.classList.remove("icon-sun"),icon.classList.add("icon-moon"),icon2.classList.remove("icon-sun"),icon2.classList.add("icon-moon"),document.documentElement.classList.remove("dark"),localStorage.theme="light"):(icon.classList.remove("icon-moon"),icon.classList.add("icon-sun"),icon2.classList.remove("icon-moon"),icon2.classList.add("icon-sun"),document.documentElement.classList.add("dark"),localStorage.theme="dark")}</script></footer></div></body></html>

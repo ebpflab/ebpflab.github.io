@@ -1,0 +1,97 @@
+<!doctype html><html lang=zh-cn><head><title>eBPFLAB 专注eBPF创新技术 | 可观测性 ftrace</title>
+<meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,minimum-scale=1"><link rel=apple-touch-icon sizes=180x180 href=/favicon/apple-touch-icon.png><link rel=icon type=image/png sizes=32x32 href=/favicon/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon/favicon-16x16.png><link rel=manifest href=/favicon/site.webmanifest><link rel=mask-icon href=/favicon/safari-pinned-tab.svg color=#5bbad5><link rel="shortcut icon" href=/favicon/favicon.ico><meta name=theme-color content="#ffffff"><meta property="og:title" content="eBPFLAB 专注eBPF创新技术 | 可观测性 ftrace"><link rel=stylesheet href="/css/style.min.92245c3bd27417eb98c54b8447892fefe1c95449620cd8cb92b17d11b1313a9e.css"><link href=/css/blonde.min.css rel=stylesheet type=text/css media=print onload='this.media=" all"'><meta name=description content="eBPFLAB 专注eBPF创新技术"><meta property="og:site_name" content="eBPFLAB 专注eBPF创新技术"><meta property="og:description" content="eBPFLAB 专注eBPF创新技术"><meta property="og:url" content="http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7ftrace/"><meta property="og:type" content="website"><meta property="og:locale" content="en_US"><meta name=twitter:card content="summary_large_image"><meta name=twitter:site content><link rel=canonical href=http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7ftrace/><meta name=twitter:description content="eBPFLAB 专注eBPF创新技术"><meta property="article:published_time" content="2024-01-11T00:00:00+00:00"><meta property="article:updated_time" content="2024-01-11T00:00:00+00:00"><meta property="og:image" content="http://www.ebpflab.com/"><meta property="og:image:url" content="http://www.ebpflab.com/"><link rel=stylesheet href=/css/custom.css><i class="dark hidden"></i></head><body class=font-sans><div class="min-h-screen flex flex-col bg-gray-100 dark:bg-warmgray-800"><div class=bg-gray-800><div class="container max-w-screen-xl mr-auto ml-auto"><nav class="flex items-center justify-between flex-wrap bg-gray-800 p-6"><div class="flex items-center flex-no-shrink bg-gray-800 text-white mr-6"><a href=http://www.ebpflab.com/><span class="font-semibold text-2xl tracking-tight">eBPFLAB 专注eBPF创新技术</span></a></div><div class="flex md:hidden"><div class=py-2><button onclick=toggleDarkMode() class="focus:outline-none mr-1" aria-label="Darkmode Toggle Button"><i id=icon class="icon-moon inline-flex align-middle leading-normal text-lg text-white"></i></button>
+<span class=text-white>|</span></div><button id=hamburgerbtn class="flex items-center px-3 py-1 text-white hover:opacity-50" aria-label="Hamburger Button">
+<span class="icon-menu text-2xl"></span></button></div><div class="hidden w-full md:flex md:flex-row sm:items-center md:w-auto" id=mobileMenu><div class="text-sm lg:flex-grow"></div><div class=navmenu><a href=/ class="no-underline duration-200 block mt-4 sm:inline-block sm:mt-0 text-white hover:opacity-50 mr-4">首页
+</a><a href=/about/ class="no-underline duration-200 block mt-4 sm:inline-block sm:mt-0 text-white hover:opacity-50 mr-4">关于
+</a><a href=/contact/ class="no-underline duration-200 block mt-4 sm:inline-block sm:mt-0 text-white hover:opacity-50 mr-4">联系方式</a></div><div class="text-white invisible md:visible"><span>|</span>
+<button onclick=toggleDarkMode() class=focus-visible:outline-none aria-label="Darkmode Toggle Button"><i id=icon2 class="icon-moon hover:opacity-50 duration-200 inline-flex align-middle leading-normal text-lg ml-2"></i></button></div></div></nav></div></div><style>.active{display:block}</style><script>let hamburger=document.getElementById("hamburgerbtn"),mobileMenu=document.getElementById("mobileMenu");hamburger.addEventListener("click",function(){mobileMenu.classList.toggle("active")})</script><div class="container max-w-screen-xl mx-auto mt-4 flex-grow px-5 lg:px-0" id=content><div class=lg:mx-5><div class="grid grid-cols-3 gap-4"><div class="bg-white col-span-3 lg:col-span-2 p-5 dark:bg-warmgray-900 dark:text-white"><h1 class="title text-4xl font-bold mb-2">可观测性 ftrace</h1><div class="content prose md:prose-lg lg:prose-xl max-w-none dark:prose-invert py-1"><hr><h2 id=介绍>介绍</h2><p>ftrace是Function Tracer的意思，最开始主要用于记录内核函数运行轨迹；随着功能的逐渐增加，演变成一个跟踪框架。</p><p>ftrace的运行不需要额外的程序，它内置在内核中，通过debugfs文件系统和用户交互。当然也有一些用户态程序方便用户交互，比如trace-cmd、kernelshark。</p><h2 id=工作原理>工作原理</h2><p>ftrace机制的执行，依赖于gcc的-pg编译选项，-pg选项在每个函数执行前插入mcount（和体系架构有关，不同架构名字有所差异）。在未启用追踪功能的时候，插入的指令为NOP，不做任何事情，启用追踪功能之后，NOP指令会被替换成ftrace_caller。</p><p>mcout是一个trampoline跳床，它返回函数的返回值，提供了一种在原流程中执行桩函数的机制。</p><p>ftrace_caller 工作如下图所示</p><h2 id=使用>使用</h2><p>ftrace的使用比较简单，与ftrace交互的API位于debufs文件系统中，通常在/sys/kernel/debug/目录下。</p><p>因为ftrace是直接内置于内核中的的，所以使用它需要配置内核支持。</p><p>通常开启如下几项配置</p><pre tabindex=0><code>CONFIG_FUNCTION_TRACER
+CONFIG_FUNCTION_GRAPH_TRACER
+CONFIG_DYNAMIC_FTRACE
+</code></pre><p>其分为静态和动态trace，常使用动态trace。</p><p>查看支持哪些tracer</p><pre tabindex=0><code># cat /sys/kernel/debug/tracing/available_tracers
+hwlat blk mmiotrace function_graph wakeup_dl wakeup_rt wakeup function nop
+</code></pre><p>设置使用那个tracer</p><pre tabindex=0><code># echo wakeup &gt; /sys/kernel/debug/tracing/current_tracer
+</code></pre><p>查看当前使用的tracer</p><pre tabindex=0><code># cat /sys/kernel/debug/tracing/current_tracer
+wakeup
+</code></pre><p>启用/停用追踪</p><pre tabindex=0><code>echo 1 &gt; /sys/kernel/debug/tracing/tracing_on
+echo 0 &gt; /sys/kernel/debug/tracing/tracing_on
+</code></pre><p>查看追踪的结果 (从文件中)</p><pre tabindex=0><code># cat /sys/kernel/debug/tracing/trace |more
+# tracer: wakeup
+#
+# wakeup latency trace v1.1.5 on 5.4.0-42-generic
+# --------------------------------------------------------------------
+# latency: 8450 us, #16610/16610, CPU#3 | (M:desktop VP:0, KP:0, SP:0 HP:0 #P:4)
+#    -----------------
+#    | task: systemd-journal-575 (uid:0 nice:-1 policy:0 rt_prio:0)
+#    -----------------
+#
+#                  _------=&gt; CPU#
+#                 / _-----=&gt; irqs-off
+#                | / _----=&gt; need-resched
+#                || / _---=&gt; hardirq/softirq
+#                ||| / _--=&gt; preempt-depth
+#                |||| /     delay
+#  cmd     pid   ||||| time  |   caller
+#     \   /      |||||  \    |   /
+ systemd-1       3d...    0us+:      1:120:R   + [003]   575:119:R systemd-journal
+ systemd-1       3d...   14us : &lt;stack trace&gt;
+ =&gt; __trace_stack
+ =&gt; probe_wakeup
+ =&gt; ttwu_do_wakeup
+ =&gt; ttwu_do_activate
+ =&gt; try_to_wake_up
+ =&gt; default_wake_function
+ =&gt; autoremove_wake_function
+ =&gt; __wake_up_common
+ =&gt; __wake_up_common_lock
+ =&gt; __wake_up
+ =&gt; ep_poll_callback
+....
+</code></pre><p>查看追踪结果，直接输出到命令行，与上面输出结果一样。</p><pre tabindex=0><code># cat /sys/kernel/debug/tracing/trace_pipe
+</code></pre><p>查看支持的动态追踪点</p><pre tabindex=0><code># cat /sys/kernel/debug/tracing/available_filter_functions |more
+trace_initcall_finish_cb
+initcall_blacklisted
+do_one_initcall
+do_one_initcall
+trace_initcall_start_cb
+run_init_process
+try_to_run_init_process
+match_dev_by_label
+match_dev_by_uuid
+rootfs_init_fs_context
+</code></pre><p>查看当前设置的动态追踪点,默认所有的都支持。</p><pre tabindex=0><code># cat /sys/kernel/debug/tracing/set_ftrace_filter
+#### all functions enabled ####
+</code></pre><p>监控某些函数</p><pre tabindex=0><code># echo xxx某函数 &gt; /sys/kernel/debug/tracing/set_ftrace_filter
+</code></pre><p>设置tracer
+查看监控</p><pre tabindex=0><code># cat /sys/kernel/debug/tracing/trace
+</code></pre><h2 id=实验>实验</h2><p>ping 127.0.0.1 查看trace</p><ol><li>设置动态追踪函数 icmp_rcv 、__sys_socket</li></ol><pre tabindex=0><code># echo icmp_rcv &gt; /sys/kernel/debug/tracing/set_ftrace_filter
+# cat set_ftrace_filter
+icmp_rcv
+</code></pre><ol start=2><li>设置tracer</li></ol><pre tabindex=0><code># echo function_graph &gt; /sys/kernel/debug/tracing/current_tracer
+# cat current_tracer
+function_graph
+</code></pre><ol start=3><li>ping 127.0.0.1</li></ol><pre tabindex=0><code># ping 127.0.0.1
+PING 127.0.0.1 (127.0.0.1) 56(84) bytes of data.
+64 bytes from 127.0.0.1: icmp_seq=1 ttl=64 time=0.035 ms
+64 bytes from 127.0.0.1: icmp_seq=2 ttl=64 time=0.116 ms
+64 bytes from 127.0.0.1: icmp_seq=3 ttl=64 time=0.113 ms
+^C
+--- 127.0.0.1 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2031ms
+rtt min/avg/max/mdev = 0.035/0.088/0.116/0.037 ms
+</code></pre><ol start=4><li>查看追踪情况</li></ol><pre tabindex=0><code># cat trace
+# tracer: function_graph
+#
+# CPU  DURATION                  FUNCTION CALLS
+# |     |   |                     |   |   |   |
+   2)   9.289 us    |  icmp_rcv();
+   2)   1.422 us    |  icmp_rcv();
+   2) + 26.285 us   |  icmp_rcv();
+   2)   6.820 us    |  icmp_rcv();
+   2) + 25.768 us   |  icmp_rcv();
+   2)   6.255 us    |  icmp_rcv();
+</code></pre><h2 id=参考>参考</h2><p><a href=https://en.wikipedia.org/wiki/Ftrace>https://en.wikipedia.org/wiki/Ftrace</a>
+<a href=https://www.cnblogs.com/arnoldlu/p/7211249.html>https://www.cnblogs.com/arnoldlu/p/7211249.html</a>
+<a href=https://docs.kernel.org/trace/ftrace.html>https://docs.kernel.org/trace/ftrace.html</a></p><p><a href=https://lwn.net/Articles/322666>https://lwn.net/Articles/322666</a></p></div></div><div class="hidden lg:block lg:col-span-1"><div class=mb-3><form class=widget-search__form role=search method=get action=https://google.com/search><label><input class="w-full p-3 focus:outline-none dark:bg-warmgray-900 dark:text-white placeholder-gray-700 dark:placeholder-gray-300" type=search placeholder=Search... name=q aria-label=Search>
+</label><input class=hidden type=submit value=Search>
+<input type=hidden name=sitesearch value=http://www.ebpflab.com/></form></div><div class="bg-white panel mb-3 pb-5 dark:bg-warmgray-900"><p class="text-xl text-center text-gray-700 py-3 px-3 dark:text-gray-300 font-bold">Archives</p></div><div class="bg-white panel mb-3 pb-5 dark:bg-warmgray-900"><p class="text-xl text-center text-gray-700 py-5 dark:text-gray-300 font-bold">Categories</p><a class="text-center block duration-100 py-2 px-4 mx-4 hover:bg-gray-100 text-gray-800 dark:text-gray-200 dark:hover:bg-warmgray-800" href=http://www.ebpflab.com//categories/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7>可观测性</a></div><div class="bg-white panel mb-3 pb-5 dark:bg-warmgray-900"><p class="text-xl text-center text-gray-700 py-5 dark:text-gray-300 font-bold">Recent Posts</p><div class=mx-6><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7ftrace/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 ftrace</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 kprobe</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe-ebpf/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 kprobe ebpf</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe-trace/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 kprobe trace</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7uprobe/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 uprobe</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a></div></div></div></div></div></div><footer class="bg-gray-800 text-white p-6"><div class="container max-w-screen-xl mr-auto ml-auto"><p>&copy; 2024 <a href=http://www.ebpflab.com/ class="duration-200 hover:opacity-50">eBPFLAB 专注eBPF创新技术</a></p><p>Powered by <a href=https://gohugo.io/ class="duration-200 hover:opacity-50">Hugo</a>, Theme <a href=https://github.com/opera7133/Blonde class="duration-200 hover:opacity-50">Blonde</a>.
+Copyright &copy; eBPFLAB <a href=https://beian.miit.gov.cn/#/Integrated/index class="duration-200 hover:opacity-50">京ICP备2024042531号-1</a></p></div><script>var icon=document.getElementById("icon"),icon2=document.getElementById("icon2");document.documentElement.classList.contains("dark")||localStorage.theme==="dark"||!("theme"in localStorage)&&window.matchMedia("(prefers-color-scheme: dark)").matches?(icon.classList.remove("icon-moon"),icon.classList.add("icon-sun"),icon2.classList.remove("icon-moon"),icon2.classList.add("icon-sun"),document.documentElement.classList.add("dark")):document.documentElement.classList.remove("dark");function toggleDarkMode(){document.documentElement.classList.contains("dark")?(icon.classList.remove("icon-sun"),icon.classList.add("icon-moon"),icon2.classList.remove("icon-sun"),icon2.classList.add("icon-moon"),document.documentElement.classList.remove("dark"),localStorage.theme="light"):(icon.classList.remove("icon-moon"),icon.classList.add("icon-sun"),icon2.classList.remove("icon-moon"),icon2.classList.add("icon-sun"),document.documentElement.classList.add("dark"),localStorage.theme="dark")}</script></footer></div></body></html>

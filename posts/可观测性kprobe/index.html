@@ -1,0 +1,406 @@
+<!doctype html><html lang=zh-cn><head><title>eBPFLAB 专注eBPF创新技术 | 可观测性 kprobe</title>
+<meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,minimum-scale=1"><link rel=apple-touch-icon sizes=180x180 href=/favicon/apple-touch-icon.png><link rel=icon type=image/png sizes=32x32 href=/favicon/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon/favicon-16x16.png><link rel=manifest href=/favicon/site.webmanifest><link rel=mask-icon href=/favicon/safari-pinned-tab.svg color=#5bbad5><link rel="shortcut icon" href=/favicon/favicon.ico><meta name=theme-color content="#ffffff"><meta property="og:title" content="eBPFLAB 专注eBPF创新技术 | 可观测性 kprobe"><link rel=stylesheet href="/css/style.min.92245c3bd27417eb98c54b8447892fefe1c95449620cd8cb92b17d11b1313a9e.css"><link href=/css/blonde.min.css rel=stylesheet type=text/css media=print onload='this.media=" all"'><meta name=description content="eBPFLAB 专注eBPF创新技术"><meta property="og:site_name" content="eBPFLAB 专注eBPF创新技术"><meta property="og:description" content="eBPFLAB 专注eBPF创新技术"><meta property="og:url" content="http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe/"><meta property="og:type" content="website"><meta property="og:locale" content="en_US"><meta name=twitter:card content="summary_large_image"><meta name=twitter:site content><link rel=canonical href=http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe/><meta name=twitter:description content="eBPFLAB 专注eBPF创新技术"><meta property="article:published_time" content="2024-01-11T00:00:00+00:00"><meta property="article:updated_time" content="2024-01-11T00:00:00+00:00"><meta property="og:image" content="http://www.ebpflab.com/"><meta property="og:image:url" content="http://www.ebpflab.com/"><link rel=stylesheet href=/css/custom.css><i class="dark hidden"></i></head><body class=font-sans><div class="min-h-screen flex flex-col bg-gray-100 dark:bg-warmgray-800"><div class=bg-gray-800><div class="container max-w-screen-xl mr-auto ml-auto"><nav class="flex items-center justify-between flex-wrap bg-gray-800 p-6"><div class="flex items-center flex-no-shrink bg-gray-800 text-white mr-6"><a href=http://www.ebpflab.com/><span class="font-semibold text-2xl tracking-tight">eBPFLAB 专注eBPF创新技术</span></a></div><div class="flex md:hidden"><div class=py-2><button onclick=toggleDarkMode() class="focus:outline-none mr-1" aria-label="Darkmode Toggle Button"><i id=icon class="icon-moon inline-flex align-middle leading-normal text-lg text-white"></i></button>
+<span class=text-white>|</span></div><button id=hamburgerbtn class="flex items-center px-3 py-1 text-white hover:opacity-50" aria-label="Hamburger Button">
+<span class="icon-menu text-2xl"></span></button></div><div class="hidden w-full md:flex md:flex-row sm:items-center md:w-auto" id=mobileMenu><div class="text-sm lg:flex-grow"></div><div class=navmenu><a href=/ class="no-underline duration-200 block mt-4 sm:inline-block sm:mt-0 text-white hover:opacity-50 mr-4">首页
+</a><a href=/about/ class="no-underline duration-200 block mt-4 sm:inline-block sm:mt-0 text-white hover:opacity-50 mr-4">关于
+</a><a href=/contact/ class="no-underline duration-200 block mt-4 sm:inline-block sm:mt-0 text-white hover:opacity-50 mr-4">联系方式</a></div><div class="text-white invisible md:visible"><span>|</span>
+<button onclick=toggleDarkMode() class=focus-visible:outline-none aria-label="Darkmode Toggle Button"><i id=icon2 class="icon-moon hover:opacity-50 duration-200 inline-flex align-middle leading-normal text-lg ml-2"></i></button></div></div></nav></div></div><style>.active{display:block}</style><script>let hamburger=document.getElementById("hamburgerbtn"),mobileMenu=document.getElementById("mobileMenu");hamburger.addEventListener("click",function(){mobileMenu.classList.toggle("active")})</script><div class="container max-w-screen-xl mx-auto mt-4 flex-grow px-5 lg:px-0" id=content><div class=lg:mx-5><div class="grid grid-cols-3 gap-4"><div class="bg-white col-span-3 lg:col-span-2 p-5 dark:bg-warmgray-900 dark:text-white"><h1 class="title text-4xl font-bold mb-2">可观测性 kprobe</h1><div class="content prose md:prose-lg lg:prose-xl max-w-none dark:prose-invert py-1"><hr><h2 id=介绍>介绍</h2><p>kprobe是一种动态调试机制，能够动态地中断内核处理流程并无中断地收集调试和性能信息，可以在内核的绝大多数指定函数中动态插入探测点来收集所需的调试状态信息而基本不影响内核原有的执行流程，kprobe不用修改内核源码，是指令集的探测技术。</p><p>有三种方式来达到kprobe的目的。</p><ol><li>编写内核模块，增加kprobe hook。</li><li>使用ftrace 监控kprobe event。</li><li>使用ebpf 增加kprobe hook。</li></ol><p>本篇只讲第一种。</p><h2 id=工作原理>工作原理</h2><p>工作机制如图所示，</p><ol><li><p>当注册一个kprobe的时候，把addr位置的指令修改为brk指令。</p></li><li><p>CPU执行到addr处trap到pre_handler执行。</p></li><li><p>pre_handler执行完毕后产生debug异常执行post_handler。</p></li><li><p>CPU继续执行addr处的指令。</p></li></ol><h2 id=kprobe的管理>kprobe的管理</h2><h4 id=初始化>初始化</h4><p><code>init_kprobes</code>初始化kprobe hash表kprobe_table;采集黑名单 kretprobe_blacklist; 异常notifier 以及模块notifier。</p><pre tabindex=0><code>static int __init init_kprobes(void)
+{
+	for (i = 0; i &lt; KPROBE_TABLE_SIZE; i++) {
+		INIT_HLIST_HEAD(&amp;kprobe_table[i]);
+		INIT_HLIST_HEAD(&amp;kretprobe_inst_table[i]);
+		raw_spin_lock_init(&amp;(kretprobe_table_locks[i].lock));
+	}
+
+	err = populate_kprobe_blacklist(__start_kprobe_blacklist,
+					__stop_kprobe_blacklist);
+...						
+...
+	err = arch_init_kprobes();
+	if (!err)
+		err = register_die_notifier(&amp;kprobe_exceptions_nb);
+	if (!err)
+		err = register_module_notifier(&amp;kprobe_module_nb);
+...
+}
+</code></pre><p>kprobe 实例存放在全局的hash表中，以函数的地址做hash值。</p><pre tabindex=0><code>#define KPROBE_HASH_BITS 6
+#define KPROBE_TABLE_SIZE (1 &lt;&lt; KPROBE_HASH_BITS)
+
+static struct hlist_head kprobe_table[KPROBE_TABLE_SIZE];
+
+struct kprobe {
+	struct hlist_node hlist;
+
+	/* list of kprobes for multi-handler support */
+	struct list_head list;
+
+	/*count the number of times this probe was temporarily disarmed */
+	unsigned long nmissed;
+
+	/* location of the probe point */
+	kprobe_opcode_t *addr;
+
+	/* Allow user to indicate symbol name of the probe point */
+	const char *symbol_name;
+
+	/* Offset into the symbol */
+	unsigned int offset;
+
+	/* Called before addr is executed. */
+	kprobe_pre_handler_t pre_handler;
+
+	/* Called after addr is executed, unless... */
+	kprobe_post_handler_t post_handler;
+
+	/*
+	 * ... called if executing addr causes a fault (eg. page fault).
+	 * Return 1 if it handled fault, otherwise kernel will see it.
+	 */
+	kprobe_fault_handler_t fault_handler;
+
+	/* Saved opcode (which has been replaced with breakpoint) */
+	kprobe_opcode_t opcode;
+
+	/* copy of the original instruction */
+	struct arch_specific_insn ainsn;
+
+	/*
+	 * Indicates various status flags.
+	 * Protected by kprobe_mutex after this kprobe is registered.
+	 */
+	u32 flags;
+}
+</code></pre><p>动态的注册一个 kprobe, 加入到 kprobe_table hash表中，把要采集的函数地址addr替换为brk指令。</p><pre tabindex=0><code>int register_kprobe(struct kprobe *p)
+{
+    ...
+	INIT_HLIST_NODE(&amp;p-&gt;hlist);
+	hlist_add_head_rcu(&amp;p-&gt;hlist,
+		       &amp;kprobe_table[hash_ptr(p-&gt;addr, KPROBE_HASH_BITS)]);
+	if (!kprobes_all_disarmed &amp;&amp; !kprobe_disabled(p)) {
+		ret = arm_kprobe(p);
+		if (ret) {
+			hlist_del_rcu(&amp;p-&gt;hlist);
+			synchronize_rcu();
+			goto out;
+		}
+	}
+    ...
+}
+</code></pre><p>kprobe的处理是分体系结构的，不同的架构指令值不同。以x86为例子，在arch_arm_kprobe把addr替换成brk。</p><pre tabindex=0><code>/arch/x86/include/asm/kprobes.h
+#define BREAKPOINT_INSTRUCTION	0xcc
+</code></pre><p><code>arm_kprobe ---> arm_kprobe ----> arch_arm_kprobe</code></p><pre tabindex=0><code>void arch_arm_kprobe(struct kprobe *p)
+{
+	text_poke(p-&gt;addr, ((unsigned char []){BREAKPOINT_INSTRUCTION}), 1);
+}
+</code></pre><h4 id=操作api>操作API</h4><p>注册/去注册</p><pre tabindex=0><code>int register_kprobe(struct kprobe *p);
+void unregister_kprobe(struct kprobe *p);
+</code></pre><p>使能/去使能</p><pre tabindex=0><code>int enable_kprobe(struct kprobe *kp);
+int disable_kprobe(struct kprobe *kp);
+</code></pre><p>获取kprobe</p><pre tabindex=0><code>/* Get the kprobe at this addr (if any) - called with preemption disabled */
+struct kprobe *get_kprobe(void *addr);
+/* kprobe_running() will just return the current_kprobe on this CPU */
+static inline struct kprobe *kprobe_running(void)
+{
+	return (__this_cpu_read(current_kprobe));
+}
+</code></pre><h2 id=hook点>hook点</h2><h4 id=hook的选取原则>hook的选取原则</h4><p>内核函数很多，但是并不是所有的函数都适合做hook，inline函数无法作为hook、static函数有可能会被优化。所以hook一般会在 /proc/kallsyms 中选取。</p><h4 id=hook的执行>hook的执行</h4><p>When a kprobe is registered, Kprobes makes a copy of the probed instruction and replaces the first byte(s) of the probed instruction with a breakpoint instruction (e.g., int3 on i386 and x86_64).</p><p>注册 kprobe 后，Kprobes 会复制被探测的指令，并用断点指令（例如 i386 和 x86_64 上的 int3）替换被探测指令的第一个字节。</p><p>When a CPU hits the breakpoint instruction, a trap occurs, the CPU&rsquo;s registers are saved, and control passes to Kprobes via the notifier_call_chain mechanism. Kprobes executes the &ldquo;pre_handler&rdquo; associated with the kprobe, passing the handler the addresses of the kprobe struct and the saved registers.</p><p>当 CPU 遇到断点指令时，会发生陷阱，保存 CPU 的寄存器，并通过 notifier_call_chain 机制将控制权传递给 Kprobes。 Kprobes 在函数 kprobe_handler中 执行与 kprobe 相关的“pre_handler”，将 kprobe 结构的地址和保存的寄存器传递给处理程序。
+对于x86、arm64体系架构 notifier_call_chain 通知链回调函数并没有实际的作用了。</p><p>Next, Kprobes single-steps its copy of the probed instruction. (It would be simpler to single-step the actual instruction in place, but then Kprobes would have to temporarily remove the breakpoint instruction. This would open a small time window when another CPU could sail right past the probepoint.)</p><p>接下来，Kprobes 单步执行其探测指令的副本。（单步执行实际指令会更简单，但 Kprobes 将不得不暂时删除断点指令，这将打开一个小的时间窗口，此时另一个 CPU 可以直接越过探测点。）</p><p>After the instruction is single-stepped, Kprobes executes the &ldquo;post_handler,&rdquo; if any, that is associated with the kprobe. Execution then continues with the instruction following the probepoint.</p><p>在指令单步执行后，会产生debug异常，Kprobes 执行与 kprobe 关联的“post_handler”（如果有）， 然后继续执行探测点之后的指令。</p><ol><li>pre_handler
+在执行被探测函数之前调用，在<code>do_int3</code>中执行。</li></ol><pre tabindex=0><code>dotraplinkage void notrace do_int3(struct pt_regs *regs, long error_code)
+{
+	...
+#ifdef CONFIG_KPROBES
+	if (kprobe_int3_handler(regs))
+		goto exit;
+#endif
+
+	if (notify_die(DIE_INT3, &#34;int3&#34;, regs, error_code, X86_TRAP_BP,
+			SIGTRAP) == NOTIFY_STOP)
+		goto exit;
+
+	cond_local_irq_enable(regs);
+	do_trap(X86_TRAP_BP, SIGTRAP, &#34;int3&#34;, regs, error_code, 0, NULL);
+	cond_local_irq_disable(regs);	
+	...
+}
+
+/*
+ * Interrupts are disabled on entry as trap3 is an interrupt gate and they
+ * remain disabled throughout this function.
+ */
+int kprobe_int3_handler(struct pt_regs *regs)
+{
+	...
+	addr = (kprobe_opcode_t *)(regs-&gt;ip - sizeof(kprobe_opcode_t));
+	/*
+	 * We don&#39;t want to be preempted for the entire duration of kprobe
+	 * processing. Since int3 and debug trap disables irqs and we clear
+	 * IF while singlestepping, it must be no preemptible.
+	 */
+
+	kcb = get_kprobe_ctlblk();
+	p = get_kprobe(addr);
+	if (p) {
+		...
+			set_current_kprobe(p, regs, kcb);
+			kcb-&gt;kprobe_status = KPROBE_HIT_ACTIVE;
+
+			if (!p-&gt;pre_handler || !p-&gt;pre_handler(p, regs))
+				setup_singlestep(p, regs, kcb, 0);
+			else
+				reset_current_kprobe();
+			return 1;
+	}	
+}
+
+static void setup_singlestep(struct kprobe *p, struct pt_regs *regs, struct kprobe_ctlblk *kcb, int reenter)
+{
+	...
+		regs-&gt;flags |= X86_EFLAGS_TF;
+	regs-&gt;flags &amp;= ~X86_EFLAGS_IF;
+	/* single step inline if the instruction is an int3 */
+	if (p-&gt;opcode == BREAKPOINT_INSTRUCTION)
+		regs-&gt;ip = (unsigned long)p-&gt;addr;
+	else
+		regs-&gt;ip = (unsigned long)p-&gt;ainsn.insn;
+	...
+}
+</code></pre><ol start=2><li>post_handler
+在执行被探测函数之后调用，在<code>do_debug</code>中执行。</li></ol><pre tabindex=0><code>dotraplinkage void do_debug(struct pt_regs *regs, long error_code)
+{
+	...
+#ifdef CONFIG_KPROBES
+	if (kprobe_debug_handler(regs))
+		goto exit;
+#endif
+
+	if (notify_die(DIE_DEBUG, &#34;debug&#34;, regs, (long)&amp;dr6, error_code,
+							SIGTRAP) == NOTIFY_STOP)
+		goto exit;	
+	...
+}
+
+/*
+ * Interrupts are disabled on entry as trap1 is an interrupt gate and they
+ * remain disabled throughout this function.
+ */
+int kprobe_debug_handler(struct pt_regs *regs)
+{
+	struct kprobe *cur = kprobe_running();
+	...
+	if ((kcb-&gt;kprobe_status != KPROBE_REENTER) &amp;&amp; cur-&gt;post_handler) {
+		kcb-&gt;kprobe_status = KPROBE_HIT_SSDONE;
+		cur-&gt;post_handler(cur, regs, 0);
+	}
+	...
+}
+</code></pre><h2 id=黑名单>黑名单</h2><h4 id=标记>标记</h4><p>标记函数不被probe的步骤:</p><ol><li>include linux/kprobes.h</li><li>use NOKPROBE_SYMBOL() macro</li></ol><p>使用宏 NOKPROBE_SYMBOL 标记函数为_kprobe_blacklist section，该函数地址不被probe。</p><pre tabindex=0><code>/*
+ * Blacklist ganerating macro. Specify functions which is not probed
+ * by using this macro.
+ */
+# define __NOKPROBE_SYMBOL(fname)				\
+static unsigned long __used					\
+	__attribute__((__section__(&#34;_kprobe_blacklist&#34;)))	\
+	_kbl_addr_##fname = (unsigned long)fname;
+# define NOKPROBE_SYMBOL(fname)	__NOKPROBE_SYMBOL(fname)
+/* Use this to forbid a kprobes attach on very low level functions */
+# define __kprobes	__attribute__((__section__(&#34;.kprobes.text&#34;)))
+# define nokprobe_inline	__always_inline
+</code></pre><h4 id=初始化-1>初始化</h4><p>在kprobe 初始化的时候 init_kprobes 遍历 _kprobe_blacklist section 区域，加入到全局链表中 kprobe_blacklist</p><pre tabindex=0><code>struct kprobe_blacklist_entry {
+	struct list_head list;
+	unsigned long start_addr;
+	unsigned long end_addr;
+};
+
+/* Blacklist -- list of struct kprobe_blacklist_entry */
+static LIST_HEAD(kprobe_blacklist);
+</code></pre><h2 id=debugfs-接口>debugfs 接口</h2><p>目录下
+/sys/kernel/debug/kprobes/</p><ol><li>blacklist 显示不被probe的函数地址，
+显示格式为
+起始地址-结束地址 符号表名
+如果<code>/proc/kallsyms</code> 不显示地址，则也不显示地址</li></ol><pre tabindex=0><code>cat /sys/kernel/debug/kprobes/blacklist
+0xffffffff8b400920-0xffffffff8b4009e8   interrupt_entry
+0xffffffff8b4009e8-0xffffffff8b400a00   common_spurious
+0xffffffff8b400a00-0xffffffff8b400a0f   common_interrupt
+0xffffffff8b400bb0-0xffffffff8b400bd0   irq_move_cleanup_interrupt
+0xffffffff8b400bd0-0xffffffff8b400bf0   reboot_interrupt
+0xffffffff8b400bf0-0xffffffff8b400c10   uv_bau_message_intr1
+0xffffffff8b401c60-0xffffffff8b401c80   apic_timer_interrupt
+</code></pre><ol start=2><li><p>enabled 启用\停用probe 有效的值为Y、y、1或者N、n、0</p></li><li><p>list 显示probe详细信息
+显示格式同样分为两种格式
+1.地址 probe类型 函数名+偏移量 模块名 状态
+2.地址 probe类型 地址 状态</p></li></ol><p>probe类型：
+k代表kprobe r表示为kretprobe</p><p>状态有：
+<code>GONE DISABLED OPTIMIZED FTRACE</code></p><pre tabindex=0><code>/* Kprobe status flags */
+#define KPROBE_FLAG_GONE	1 /* breakpoint has already gone */
+#define KPROBE_FLAG_DISABLED	2 /* probe is temporarily disabled */
+#define KPROBE_FLAG_OPTIMIZED	4 /*
+				   * probe is really optimized.
+				   * NOTE:
+				   * this flag is only for optimized_kprobe.
+				   */
+#define KPROBE_FLAG_FTRACE	8 /* probe is using ftrace */
+
+/* Has this kprobe gone ? */
+static inline int kprobe_gone(struct kprobe *p)
+{
+	return p-&gt;flags &amp; KPROBE_FLAG_GONE;
+}
+
+/* Is this kprobe disabled ? */
+static inline int kprobe_disabled(struct kprobe *p)
+{
+	return p-&gt;flags &amp; (KPROBE_FLAG_DISABLED | KPROBE_FLAG_GONE);
+}
+
+/* Is this kprobe really running optimized path ? */
+static inline int kprobe_optimized(struct kprobe *p)
+{
+	return p-&gt;flags &amp; KPROBE_FLAG_OPTIMIZED;
+}
+
+/* Is this kprobe uses ftrace ? */
+static inline int kprobe_ftrace(struct kprobe *p)
+{
+	return p-&gt;flags &amp; KPROBE_FLAG_FTRACE;
+}
+</code></pre><p>list 输出函数</p><pre tabindex=0><code>static void report_probe(struct seq_file *pi, struct kprobe *p,
+		const char *sym, int offset, char *modname, struct kprobe *pp)
+{
+	char *kprobe_type;
+	void *addr = p-&gt;addr;
+
+	if (p-&gt;pre_handler == pre_handler_kretprobe)
+		kprobe_type = &#34;r&#34;;
+	else
+		kprobe_type = &#34;k&#34;;
+
+	if (!kallsyms_show_value(pi-&gt;file-&gt;f_cred))
+		addr = NULL;
+
+	if (sym)
+		seq_printf(pi, &#34;%px  %s  %s+0x%x  %s &#34;,
+			addr, kprobe_type, sym, offset,
+			(modname ? modname : &#34; &#34;));
+	else	/* try to use %pS */
+		seq_printf(pi, &#34;%px  %s  %pS &#34;,
+			addr, kprobe_type, p-&gt;addr);
+
+	if (!pp)
+		pp = p;
+	seq_printf(pi, &#34;%s%s%s%s\n&#34;,
+		(kprobe_gone(p) ? &#34;[GONE]&#34; : &#34;&#34;),
+		((kprobe_disabled(p) &amp;&amp; !kprobe_gone(p)) ?  &#34;[DISABLED]&#34; : &#34;&#34;),
+		(kprobe_optimized(pp) ? &#34;[OPTIMIZED]&#34; : &#34;&#34;),
+		(kprobe_ftrace(pp) ? &#34;[FTRACE]&#34; : &#34;&#34;));
+}
+</code></pre><h2 id=kprobes-sysctl-接口>kprobes sysctl 接口</h2><p>/proc/sys/debug/kprobes-optimization
+kprobe优化开关，默认优化开启。</p><pre tabindex=0><code>static struct ctl_table debug_table[] = {
+#if defined(CONFIG_OPTPROBES)
+	{
+		.procname	= &#34;kprobes-optimization&#34;,
+		.data		= &amp;sysctl_kprobes_optimization,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_kprobes_optimization_handler,
+		.extra1		= SYSCTL_ZERO,
+		.extra2		= SYSCTL_ONE,
+	},
+#endif
+}
+</code></pre><h4 id=优化>优化</h4><p>优化是有一个内核工作线程完成的。除了开关控制之后，在注册kprobe的时候会尝试优化，默认是优化处理的。</p><pre tabindex=0><code>/* Optimization staging list, protected by kprobe_mutex */
+static LIST_HEAD(optimizing_list);
+static LIST_HEAD(unoptimizing_list);
+static LIST_HEAD(freeing_list);
+
+static void kprobe_optimizer(struct work_struct *work);
+static DECLARE_DELAYED_WORK(optimizing_work, kprobe_optimizer);
+#define OPTIMIZE_DELAY 5
+</code></pre><p>不是所有的probe都可以优化，带post_handler的kprobe不能被优化。</p><p>kprobes-optimization 开关使能之后，遍历所有可以优化的kprobe加入到可优化的链表optimizing_list中，调用关系如下。</p><p><code>proc_kprobes_optimization_handler ---> optimize_all_kprobes ---> optimize_kprobe</code></p><pre tabindex=0><code>/* Optimize kprobe if p is ready to be optimized */
+static void optimize_kprobe(struct kprobe *p)
+{
+	struct optimized_kprobe *op;
+
+...
+
+	/* kprobes with post_handler can not be optimized */
+	if (p-&gt;post_handler)
+		return;
+
+	op = container_of(p, struct optimized_kprobe, kp);
+
+...
+	op-&gt;kp.flags |= KPROBE_FLAG_OPTIMIZED;
+
+	/* On unoptimizing/optimizing_list, op must have OPTIMIZED flag */
+	if (WARN_ON_ONCE(!list_empty(&amp;op-&gt;list)))
+		return;
+
+	list_add(&amp;op-&gt;list, &amp;optimizing_list);
+	kick_kprobe_optimizer();
+}
+</code></pre><p>在optimize_kprobe 函数中把可以优化的kprobe加入到优化列表optimizing_list，然后唤醒工作队列。</p><p>在工作队列的的处理函数中，把init3指令替换成真实的jump地址。</p><pre tabindex=0><code>/*
+ * Replace breakpoints (int3) with relative jumps.
+ * Caller must call with locking kprobe_mutex and text_mutex.
+ */
+void arch_optimize_kprobes(struct list_head *oplist)
+{
+	struct optimized_kprobe *op, *tmp;
+	u8 insn_buff[RELATIVEJUMP_SIZE];
+
+	list_for_each_entry_safe(op, tmp, oplist, list) {
+		s32 rel = (s32)((long)op-&gt;optinsn.insn -
+			((long)op-&gt;kp.addr + RELATIVEJUMP_SIZE));
+
+		WARN_ON(kprobe_disabled(&amp;op-&gt;kp));
+
+		/* Backup instructions which will be replaced by jump address */
+		memcpy(op-&gt;optinsn.copied_insn, op-&gt;kp.addr + INT3_SIZE,
+		       RELATIVE_ADDR_SIZE);
+
+		insn_buff[0] = RELATIVEJUMP_OPCODE;
+		*(s32 *)(&amp;insn_buff[1]) = rel;
+
+		text_poke_bp(op-&gt;kp.addr, insn_buff, RELATIVEJUMP_SIZE,
+			     op-&gt;optinsn.insn);
+
+		list_del_init(&amp;op-&gt;list);
+	}
+}
+</code></pre><h2 id=实验>实验</h2><p>探测ping包的发送。</p><p>基于 samples/kprobes/kprobe_example.c 修改如下</p><pre tabindex=0><code>static char symbol[MAX_SYMBOL_LEN] = &#34;ping_v4_sendmsg&#34;;
+module_param_string(symbol, symbol, sizeof(symbol), 0644);
+
+/* For each probe you need to allocate a kprobe structure */
+static struct kprobe kp = {
+        .symbol_name    = symbol,
+};
+
+/* kprobe pre_handler: called just before the probed instruction is executed */
+static int handler_pre(struct kprobe *p, struct pt_regs *regs)
+{
+#ifdef CONFIG_X86
+        pr_info(&#34;&lt;%s&gt; pre_handler: p-&gt;addr = 0x%p, start ping\n&#34;,
+                p-&gt;symbol_name, p-&gt;addr);
+}
+
+/* kprobe post_handler: called after the probed instruction is executed */
+static void handler_post(struct kprobe *p, struct pt_regs *regs,
+                                unsigned long flags)
+{
+#ifdef CONFIG_X86
+        pr_info(&#34;&lt;%s&gt; post_handler: p-&gt;addr = 0x%p, ping done\n&#34;,
+                p-&gt;symbol_name, p-&gt;addr);
+}
+</code></pre><p>编译成ko，加载到内核。</p><p>执行ping</p><pre tabindex=0><code>PING github.com (20.205.243.166) 56(84) bytes of data.
+64 bytes from 20.205.243.166 (20.205.243.166): icmp_seq=1 ttl=128 time=113 ms
+64 bytes from 20.205.243.166 (20.205.243.166): icmp_seq=2 ttl=128 time=112 ms
+^C
+--- github.com ping statistics ---
+</code></pre><p>dmesg信息</p><pre tabindex=0><code>[94402.119451] &lt;ping_v4_sendmsg&gt; pre_handler: p-&gt;addr = 0x00000000dd88dbce, start ping
+[94402.119452] &lt;ping_v4_sendmsg&gt; post_handler: p-&gt;addr = 0x00000000dd88dbce, ping done
+[94403.129446] &lt;ping_v4_sendmsg&gt; pre_handler: p-&gt;addr = 0x00000000dd88dbce, start ping
+[94403.129450] &lt;ping_v4_sendmsg&gt; post_handler: p-&gt;addr = 0x00000000dd88dbce, ping done
+</code></pre><h2 id=参考>参考</h2><p><a href=https://lwn.net/Articles/132196/>https://lwn.net/Articles/132196/</a>
+<a href=https://www.kernel.org/doc/Documentation/kprobes.txt>https://www.kernel.org/doc/Documentation/kprobes.txt</a></p></div></div><div class="hidden lg:block lg:col-span-1"><div class=mb-3><form class=widget-search__form role=search method=get action=https://google.com/search><label><input class="w-full p-3 focus:outline-none dark:bg-warmgray-900 dark:text-white placeholder-gray-700 dark:placeholder-gray-300" type=search placeholder=Search... name=q aria-label=Search>
+</label><input class=hidden type=submit value=Search>
+<input type=hidden name=sitesearch value=http://www.ebpflab.com/></form></div><div class="bg-white panel mb-3 pb-5 dark:bg-warmgray-900"><p class="text-xl text-center text-gray-700 py-3 px-3 dark:text-gray-300 font-bold">Archives</p></div><div class="bg-white panel mb-3 pb-5 dark:bg-warmgray-900"><p class="text-xl text-center text-gray-700 py-5 dark:text-gray-300 font-bold">Categories</p><a class="text-center block duration-100 py-2 px-4 mx-4 hover:bg-gray-100 text-gray-800 dark:text-gray-200 dark:hover:bg-warmgray-800" href=http://www.ebpflab.com//categories/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7>可观测性</a></div><div class="bg-white panel mb-3 pb-5 dark:bg-warmgray-900"><p class="text-xl text-center text-gray-700 py-5 dark:text-gray-300 font-bold">Recent Posts</p><div class=mx-6><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7ftrace/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 ftrace</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 kprobe</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe-ebpf/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 kprobe ebpf</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe-trace/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 kprobe trace</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7uprobe/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 uprobe</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a></div></div></div></div></div></div><footer class="bg-gray-800 text-white p-6"><div class="container max-w-screen-xl mr-auto ml-auto"><p>&copy; 2024 <a href=http://www.ebpflab.com/ class="duration-200 hover:opacity-50">eBPFLAB 专注eBPF创新技术</a></p><p>Powered by <a href=https://gohugo.io/ class="duration-200 hover:opacity-50">Hugo</a>, Theme <a href=https://github.com/opera7133/Blonde class="duration-200 hover:opacity-50">Blonde</a>.
+Copyright &copy; eBPFLAB <a href=https://beian.miit.gov.cn/#/Integrated/index class="duration-200 hover:opacity-50">京ICP备2024042531号-1</a></p></div><script>var icon=document.getElementById("icon"),icon2=document.getElementById("icon2");document.documentElement.classList.contains("dark")||localStorage.theme==="dark"||!("theme"in localStorage)&&window.matchMedia("(prefers-color-scheme: dark)").matches?(icon.classList.remove("icon-moon"),icon.classList.add("icon-sun"),icon2.classList.remove("icon-moon"),icon2.classList.add("icon-sun"),document.documentElement.classList.add("dark")):document.documentElement.classList.remove("dark");function toggleDarkMode(){document.documentElement.classList.contains("dark")?(icon.classList.remove("icon-sun"),icon.classList.add("icon-moon"),icon2.classList.remove("icon-sun"),icon2.classList.add("icon-moon"),document.documentElement.classList.remove("dark"),localStorage.theme="light"):(icon.classList.remove("icon-moon"),icon.classList.add("icon-sun"),icon2.classList.remove("icon-moon"),icon2.classList.add("icon-sun"),document.documentElement.classList.add("dark"),localStorage.theme="dark")}</script></footer></div></body></html>

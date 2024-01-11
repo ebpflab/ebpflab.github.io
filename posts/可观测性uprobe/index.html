@@ -1,0 +1,372 @@
+<!doctype html><html lang=zh-cn><head><title>eBPFLAB 专注eBPF创新技术 | 可观测性 uprobe</title>
+<meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,minimum-scale=1"><link rel=apple-touch-icon sizes=180x180 href=/favicon/apple-touch-icon.png><link rel=icon type=image/png sizes=32x32 href=/favicon/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon/favicon-16x16.png><link rel=manifest href=/favicon/site.webmanifest><link rel=mask-icon href=/favicon/safari-pinned-tab.svg color=#5bbad5><link rel="shortcut icon" href=/favicon/favicon.ico><meta name=theme-color content="#ffffff"><meta property="og:title" content="eBPFLAB 专注eBPF创新技术 | 可观测性 uprobe"><link rel=stylesheet href="/css/style.min.92245c3bd27417eb98c54b8447892fefe1c95449620cd8cb92b17d11b1313a9e.css"><link href=/css/blonde.min.css rel=stylesheet type=text/css media=print onload='this.media=" all"'><meta name=description content="eBPFLAB 专注eBPF创新技术"><meta property="og:site_name" content="eBPFLAB 专注eBPF创新技术"><meta property="og:description" content="eBPFLAB 专注eBPF创新技术"><meta property="og:url" content="http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7uprobe/"><meta property="og:type" content="website"><meta property="og:locale" content="en_US"><meta name=twitter:card content="summary_large_image"><meta name=twitter:site content><link rel=canonical href=http://www.ebpflab.com/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7uprobe/><meta name=twitter:description content="eBPFLAB 专注eBPF创新技术"><meta property="article:published_time" content="2024-01-11T00:00:00+00:00"><meta property="article:updated_time" content="2024-01-11T00:00:00+00:00"><meta property="og:image" content="http://www.ebpflab.com/"><meta property="og:image:url" content="http://www.ebpflab.com/"><link rel=stylesheet href=/css/custom.css><i class="dark hidden"></i></head><body class=font-sans><div class="min-h-screen flex flex-col bg-gray-100 dark:bg-warmgray-800"><div class=bg-gray-800><div class="container max-w-screen-xl mr-auto ml-auto"><nav class="flex items-center justify-between flex-wrap bg-gray-800 p-6"><div class="flex items-center flex-no-shrink bg-gray-800 text-white mr-6"><a href=http://www.ebpflab.com/><span class="font-semibold text-2xl tracking-tight">eBPFLAB 专注eBPF创新技术</span></a></div><div class="flex md:hidden"><div class=py-2><button onclick=toggleDarkMode() class="focus:outline-none mr-1" aria-label="Darkmode Toggle Button"><i id=icon class="icon-moon inline-flex align-middle leading-normal text-lg text-white"></i></button>
+<span class=text-white>|</span></div><button id=hamburgerbtn class="flex items-center px-3 py-1 text-white hover:opacity-50" aria-label="Hamburger Button">
+<span class="icon-menu text-2xl"></span></button></div><div class="hidden w-full md:flex md:flex-row sm:items-center md:w-auto" id=mobileMenu><div class="text-sm lg:flex-grow"></div><div class=navmenu><a href=/ class="no-underline duration-200 block mt-4 sm:inline-block sm:mt-0 text-white hover:opacity-50 mr-4">首页
+</a><a href=/about/ class="no-underline duration-200 block mt-4 sm:inline-block sm:mt-0 text-white hover:opacity-50 mr-4">关于
+</a><a href=/contact/ class="no-underline duration-200 block mt-4 sm:inline-block sm:mt-0 text-white hover:opacity-50 mr-4">联系方式</a></div><div class="text-white invisible md:visible"><span>|</span>
+<button onclick=toggleDarkMode() class=focus-visible:outline-none aria-label="Darkmode Toggle Button"><i id=icon2 class="icon-moon hover:opacity-50 duration-200 inline-flex align-middle leading-normal text-lg ml-2"></i></button></div></div></nav></div></div><style>.active{display:block}</style><script>let hamburger=document.getElementById("hamburgerbtn"),mobileMenu=document.getElementById("mobileMenu");hamburger.addEventListener("click",function(){mobileMenu.classList.toggle("active")})</script><div class="container max-w-screen-xl mx-auto mt-4 flex-grow px-5 lg:px-0" id=content><div class=lg:mx-5><div class="grid grid-cols-3 gap-4"><div class="bg-white col-span-3 lg:col-span-2 p-5 dark:bg-warmgray-900 dark:text-white"><h1 class="title text-4xl font-bold mb-2">可观测性 uprobe</h1><div class="content prose md:prose-lg lg:prose-xl max-w-none dark:prose-invert py-1"><hr><h2 id=介绍>介绍</h2><p>uprobe是User-Level Dynamic Tracing的简称，相对于内核态的kprobe而言，它是用于跟踪用户态程序的，使用上和kprobe类似。</p><p>使用前先检测一下内核的配置，确保<code>CONFIG_UPROBE_EVENTS</code>使能。</p><pre tabindex=0><code># cat /boot/config-`uname -r` |grep CONFIG_UPROBE_EVENTS
+CONFIG_UPROBE_EVENTS=y
+</code></pre><p>通过<code>echo xxx > /sys/kernel/debug/tracing/uprobe_events</code> 添加探测点。
+使能添加的探测点<code>echo 1 > /sys/kernel/debug/tracing/events/uprobes/&lt;EVENT>/enable</code></p><p>查看事件查看依然是 <code># cat /sys/kernel/debug/tracing/trace</code></p><h2 id=工作原理>工作原理</h2><p>uprobe是和kprobe类似的，我们回归一下kprobe的工作原理，理解了kprobe处理，再看uprobe就简单了。</p><h4 id=uprobe注册>uprobe注册</h4><p>可以通过ebpf的方式或者ftrace的方式注册uprobe，这里讲ftrace的情况，对于ebpf方式在后续的ebpf专题系列中讲解。</p><p><code>init_uprobe_trace</code>函数注册debugfs文件trace file接口 <code>/sys/kernel/debug/tracing/uprobe_events</code>。</p><p>通过写入特定的格式命令到uprobe_events文件的方式注册一个uprobe，写入的内容包括程序文件索引节点、指令偏移、相关操作列表和替换指令。</p><p>命令格式为<code>p|r[:[GRP/][EVENT]] PATH:OFFSET[%return][(REF)] [FETCHARGS]</code></p><p>命令执行时对应的调用关系如下：</p><pre tabindex=0><code>probes_write或者
+        --&gt;create_or_delete_trace_uprobe
+                --&gt;trace_uprobe_create 
+                        --&gt; __trace_uprobe_create                       
+</code></pre><p>__trace_uprobe_create 创建一个 trace_uprobe 并初始化consumer.handler；</p><pre tabindex=0><code>/*
+ * uprobe event core functions
+ */
+struct trace_uprobe {
+	struct dyn_event		devent;
+	struct uprobe_consumer		consumer;
+	struct path			path;
+	struct inode			*inode;
+	char				*filename;
+	unsigned long			offset;
+	unsigned long			ref_ctr_offset;
+	unsigned long			nhit;
+	struct trace_probe		tp;
+};
+struct uprobe_consumer {
+	int (*handler)(struct uprobe_consumer *self, struct pt_regs *regs);
+	int (*ret_handler)(struct uprobe_consumer *self,
+				unsigned long func,
+				struct pt_regs *regs);
+	bool (*filter)(struct uprobe_consumer *self,
+				enum uprobe_filter_ctx ctx,
+				struct mm_struct *mm);
+
+	struct uprobe_consumer *next;
+};
+
+static struct trace_uprobe *
+alloc_trace_uprobe(const char *group, const char *event, int nargs, bool is_ret)
+{
+...
+	ret = trace_probe_init(&amp;tu-&gt;tp, event, group, true);
+	if (ret &lt; 0)
+		goto error;
+
+	dyn_event_init(&amp;tu-&gt;devent, &amp;trace_uprobe_ops);
+	tu-&gt;consumer.handler = uprobe_dispatcher;
+	if (is_ret)
+		tu-&gt;consumer.ret_handler = uretprobe_dispatcher;
+	init_trace_uprobe_filter(tu-&gt;tp.event-&gt;filter);
+...
+}
+</code></pre><p>注册uprobe event初始化trace_event_call，这里的reg在使能的时候会用到，用于注册uprobe。</p><pre tabindex=0><code>static inline void init_trace_event_call(struct trace_uprobe *tu)
+{
+	struct trace_event_call *call = trace_probe_event_call(&amp;tu-&gt;tp);
+	call-&gt;event.funcs = &amp;uprobe_funcs;
+	call-&gt;class-&gt;fields_array = uprobe_fields_array;
+
+	call-&gt;flags = TRACE_EVENT_FL_UPROBE | TRACE_EVENT_FL_CAP_ANY;
+	call-&gt;class-&gt;reg = trace_uprobe_register;
+}
+</code></pre><p>注册 trace_event 到全局event_hash，同时注册trace_event_call到全局的ftrace_events。以及注册对应的event file。</p><p>注册之后便在<code>/sys/kernel/debug/tracing/events/uprobes/</code>目录下出现对应的event目录。之后便可操作该目录下的文件做相应的功能配置。</p><h4 id=uprobe激活>uprobe激活</h4><p>分为两种情况，一种是通过命令行，另外一种是程序启动时加载。</p><ol><li><p>通过命令行执行<code>echo 1 >/sys/kernel/debug/tracing/events/uprobes/&lt;EVENT>/enable</code>便可以使能该uprobe。</p><p>是如何做到的呢？</p><p>在系统启动的时候会初始化trace,会注册一些解析event_command命令的方法。</p><pre tabindex=0><code>trace_init
+     --&gt;trace_event_init
+             --&gt;event_trace_enable
+                     --&gt;register_trigger_cmds
+                             --&gt;register_trigger_enable_disable_cmds
+</code></pre><pre tabindex=0><code>static __init int register_trigger_enable_disable_cmds(void)
+{
+    int ret;
+
+    ret = register_event_command(&amp;trigger_enable_cmd);
+    if (WARN_ON(ret &lt; 0))
+        return ret;
+    ret = register_event_command(&amp;trigger_disable_cmd);
+    if (WARN_ON(ret &lt; 0))
+        unregister_trigger_enable_disable_cmds();
+
+    return ret;
+}    
+</code></pre><p>当使能uprobe的时候执行便会执行如下调用</p><pre tabindex=0><code>event_enable_trigger_parse  即注册的trigger_enable_cmd的解析函数
+     --&gt;trace_event_enable_disable
+             --&gt;__ftrace_event_enable_disable
+                     --&gt;call-&gt;class-&gt;reg(call, TRACE_REG_REGISTER, file)
+</code></pre><p><code>call->class->reg</code>即函数<code>trace_uprobe_register</code>。</p><pre tabindex=0><code>trace_uprobe_register
+     --&gt;probe_event_enable
+             --&gt;trace_uprobe_enable
+                     --&gt;uprobe_register(tu-&gt;inode, tu-&gt;offset, &amp;tu-&gt;consumer)
+                             --&gt;__uprobe_register
+</code></pre><p>在__uprobe_register中创建一个uprobe 加入到全局的uprobes_tree；找到需要hook的地址替换为brk指令。</p><pre tabindex=0><code> static int __uprobe_register(struct inode *inode, loff_t offset, loff_t ref_ctr_offset, struct uprobe_consumer *uc)
+ {
+ ...
+         uprobe = alloc_uprobe(inode, offset, ref_ctr_offset);
+ ...
+         ret = register_for_each_vma(uprobe, uc);
+ ...
+ }
+</code></pre><p>register_for_each_vma调用find_vma从进程内存描述符mm_struct中找到需要hook的地址对应的线性内存描述符vm_area_struct *vma，调用install_breakpoint将目标hook地址的指令先保存，然后向对应的线性地址写入断点指令。</p><pre tabindex=0><code>#define UPROBE_SWBP_INSN		0xcc
+
+ int __weak set_swbp(struct arch_uprobe *auprobe, struct mm_struct *mm, unsigned long vaddr)
+ {
+ return uprobe_write_opcode(auprobe, mm, vaddr, UPROBE_SWBP_INSN);
+ }
+
+ static int
+ register_for_each_vma(struct uprobe *uprobe, struct uprobe_consumer *new)
+ {
+ ...
+ struct mm_struct *mm = info-&gt;mm;
+ struct vm_area_struct *vma;
+ ...
+ vma = find_vma(mm, info-&gt;vaddr);
+ if (!vma || !valid_vma(vma, is_register) ||
+ file_inode(vma-&gt;vm_file) != uprobe-&gt;inode)
+         goto unlock;
+
+ if (vma-&gt;vm_start &gt; info-&gt;vaddr ||
+ vaddr_to_offset(vma, info-&gt;vaddr) != uprobe-&gt;offset)
+         goto unlock;
+
+ if (is_register) {
+         /* consult only the &#34;caller&#34;, new consumer. */
+         if (consumer_filter(new,
+                         UPROBE_FILTER_REGISTER, mm))
+                 err = install_breakpoint(uprobe, mm, vma, info-&gt;vaddr);
+ } else if (test_bit(MMF_HAS_UPROBES, &amp;mm-&gt;flags)) {
+         if (!filter_chain(uprobe,
+                         UPROBE_FILTER_UNREGISTER, mm))
+                 err |= remove_breakpoint(uprobe, mm, info-&gt;vaddr);
+ }
+ ...
+
+ }   
+</code></pre></li><li><p>当程序启动的时候会调用mmap系统调用来映射内存区域。在内核中mmap会调用到<code>uprobe_mmap</code>。uprobe_mmap会查找全局的uprobes_tree来构建符合程序地址区间的uprobe list,替换目标hook地址指令为brk指令。</p></li></ol><h4 id=uprobe执行>uprobe执行</h4><p>在<code>uprobes_init</code>初始化的时候注册了die_chain通知链<code>uprobe_exception_nb</code>的notifier_call为 <code>arch_uprobe_exception_notify</code>, 注意这个是和体系结构相关的，不同的体系结构处理上稍微有点差异，下面以x86为例。</p><p>当brk指令执行时，会产生一个int3异常中断，处理die_chain通知链的回调函数arch_uprobe_exception_notify。</p><pre tabindex=0><code>arch_uprobe_exception_notify
+        --&gt;uprobe_pre_sstep_notifier
+</code></pre><p>uprobe_pre_sstep_notifier在中断上下文中，设置线程标志<code>TIF_UPROBE</code> 表明断点被命中。</p><p>异常执行之后，在返回用户态之前检查线程是否设置了TIF_UPROBE。如果设置了调用<code>uprobe_notify_resume</code>。注意这是第一次调用。</p><pre tabindex=0><code>__visible noinstr void do_syscall_64(struct pt_regs *regs, int nr)
+{
+	add_random_kstack_offset();
+	nr = syscall_enter_from_user_mode(regs, nr);
+
+	instrumentation_begin();
+
+	if (!do_syscall_x64(regs, nr) &amp;&amp; !do_syscall_x32(regs, nr) &amp;&amp; nr != -1) {
+		/* Invalid system call, but still a system call. */
+		regs-&gt;ax = __x64_sys_ni_syscall(regs);
+	}
+
+	instrumentation_end();
+	syscall_exit_to_user_mode(regs);
+}
+syscall_exit_to_user_mode
+        --&gt;__syscall_exit_to_user_mode_work
+                --&gt;exit_to_user_mode_prepare
+                        --&gt;exit_to_user_mode_loop
+                               if (ti_work &amp; _TIF_UPROBE) {
+                                uprobe_notify_resume(regs);
+                               }
+</code></pre><p>当第一次进入uprobe_notify_resume时，utask->active_uprobe为空，执行<code>handle_swbp</code>。</p><pre tabindex=0><code>void uprobe_notify_resume(struct pt_regs *regs)
+{
+	struct uprobe_task *utask;
+
+	clear_thread_flag(TIF_UPROBE);
+
+	utask = current-&gt;utask;
+	if (utask &amp;&amp; utask-&gt;active_uprobe)
+		handle_singlestep(utask, regs);
+	else
+		handle_swbp(regs);
+}
+</code></pre><p>在handle_swbp找到uprobe执行注册的处理程序，即注册uprobe时注册的<code>uprobe_consumer</code>的处理函数。</p><pre tabindex=0><code>/*
+ * Run handler and ask thread to singlestep.
+ * Ensure all non-fatal signals cannot interrupt thread while it singlesteps.
+ */
+static void handle_swbp(struct pt_regs *regs)
+{
+	struct uprobe *uprobe;
+	unsigned long bp_vaddr;
+	int is_swbp;
+
+	bp_vaddr = uprobe_get_swbp_addr(regs);
+	if (bp_vaddr == get_trampoline_vaddr())
+		return handle_trampoline(regs);
+
+	uprobe = find_active_uprobe(bp_vaddr, &amp;is_swbp);
+...
+	/* change it in advance for -&gt;handler() and restart */
+	instruction_pointer_set(regs, bp_vaddr);
+...
+	handler_chain(uprobe, regs);
+...
+	if (!pre_ssout(uprobe, regs, bp_vaddr))
+		return;
+}
+</code></pre><p>pre_ssout 这里涉及到一个 xol_area (Execute out of line area)这个放在后续分析，原始指令被brk指令替换掉，无法在存储器中执行，在一片新的区域执行。</p><p>pre_ssout 把中断异常返回地址设置为uprobes(创建的xol_area区域)中保存原始指令的地址，设置单步执行，并设置 utask->active_uprobe。</p><pre tabindex=0><code>/* Prepare to single-step probed instruction out of line. */
+static int
+pre_ssout(struct uprobe *uprobe, struct pt_regs *regs, unsigned long bp_vaddr)
+{
+	struct uprobe_task *utask;
+	unsigned long xol_vaddr;
+	int err;
+
+	utask = get_utask();
+	if (!utask)
+		return -ENOMEM;
+
+	xol_vaddr = xol_get_insn_slot(uprobe);
+	if (!xol_vaddr)
+		return -ENOMEM;
+
+	utask-&gt;xol_vaddr = xol_vaddr;
+	utask-&gt;vaddr = bp_vaddr;
+
+	err = arch_uprobe_pre_xol(&amp;uprobe-&gt;arch, regs);
+	if (unlikely(err)) {
+		xol_free_insn_slot(current);
+		return err;
+	}
+
+	utask-&gt;active_uprobe = uprobe;
+	utask-&gt;state = UTASK_SSTEP;
+	return 0;
+}
+</code></pre><p>当原始的指令执行完之后返回内核陷入单步异常，执行<code>uprobe_post_sstep_notifier</code>设置线程标志<code>TIF_UPROBE</code>。</p><pre tabindex=0><code>int uprobe_post_sstep_notifier(struct pt_regs *regs)
+{
+	struct uprobe_task *utask = current-&gt;utask;
+
+	if (!current-&gt;mm || !utask || !utask-&gt;active_uprobe)
+		/* task is currently not uprobed */
+		return 0;
+
+	utask-&gt;state = UTASK_SSTEP_ACK;
+	set_thread_flag(TIF_UPROBE);
+	return 1;
+}
+</code></pre><p>这样当返回用户态之前，检查线程设置了TIF_UPROBE标志，因为在第一次返回用户态之前utask->active_uprobe 被赋值了，在<code>uprobe_notify_resume</code>函数中就会调用到<code>handle_singlestep</code>。注意这是第二次调用。</p><p>在handle_singlestep中做一些清理性的工作，包括将单步异常的返回地址设置为hook地址的下一条指令对应的地址，清理资源，将active_uprobe设置为NULL。</p><p>最后返回到用户态的时候执行hook点之后的指令。</p><h4 id=uprobe-event语法>uprobe event语法</h4><p>event语法格式规则与kprobetrace是类似的。</p><pre tabindex=0><code>p[:[GRP/][EVENT]] PATH:OFFSET [FETCHARGS] : Set a uprobe
+r[:[GRP/][EVENT]] PATH:OFFSET [FETCHARGS] : Set a return uprobe (uretprobe)
+p[:[GRP/][EVENT]] PATH:OFFSET%return [FETCHARGS] : Set a return uprobe (uretprobe)
+-:[GRP/][EVENT]                           : Clear uprobe or uretprobe event
+
+GRP           : Group name. If omitted, &#34;uprobes&#34; is the default value.
+EVENT         : Event name. If omitted, the event name is generated based
+                on PATH+OFFSET.
+PATH          : Path to an executable or a library.
+OFFSET        : Offset where the probe is inserted.
+OFFSET%return : Offset where the return probe is inserted.
+
+FETCHARGS     : Arguments. Each probe can have up to 128 args.
+ %REG         : Fetch register REG
+ @ADDR        : Fetch memory at ADDR (ADDR should be in userspace)
+ @+OFFSET     : Fetch memory at OFFSET (OFFSET from same file as PATH)
+ $stackN      : Fetch Nth entry of stack (N &gt;= 0)
+ $stack       : Fetch stack address.
+ $retval      : Fetch return value.(\*1)
+ $comm        : Fetch current task comm.
+ +|-[u]OFFS(FETCHARG) : Fetch memory at FETCHARG +|- OFFS address.(\*2)(\*3)
+ \IMM         : Store an immediate value to the argument.
+ NAME=FETCHARG     : Set NAME as the argument name of FETCHARG.
+ FETCHARG:TYPE     : Set TYPE as the type of FETCHARG. Currently, basic types
+                     (u8/u16/u32/u64/s8/s16/s32/s64), hexadecimal types
+                     (x8/x16/x32/x64), &#34;string&#34; and bitfield are supported.
+
+(\*1) only for return probe.
+(\*2) this is useful for fetching a field of data structures.
+(\*3) Unlike kprobe event, &#34;u&#34; prefix will just be ignored, because uprobe
+      events can access only user-space memory.
+</code></pre><p>FETCHARGS 指定 kprobe event 数据显示的格式</p><ol><li>s、u: 分别表示signed、unsigned；</li><li>x：表示十六进制；</li><li>数字：s、u十进制，x十六进制，如果没有类型转换，则使用“x32”或“x64”取决于体系结构（例如，x86-32 使用 x32，x86-64 使用 x64）；</li><li>字符串：在内存中读取一个“null-terminated”的字符串；</li><li>对于$comm，默认类型是“string”；任何其他类型均无效。</li></ol><h2 id=实验>实验</h2><p>实例demo代码</p><pre tabindex=0><code>#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+
+static int func_1_num = 0;
+static int func_2_num = 0;
+
+static void func_1(void)
+{
+        printf(&#34;func 1\n&#34;);
+        func_1_num++;
+}
+
+static void func_2(void)
+{
+        printf(&#34;func 2\n&#34;);
+        func_2_num++;
+}
+
+int main(int argc, char **argv)
+{
+        int num = 0;
+
+        while(1) {
+                sleep(1);
+                num++;
+                if (num == 1) {
+                        func_1();
+                }else if (num == 2) {
+                        func_2();
+                }else {
+                        break;
+                }
+        }
+
+        return 0;
+}
+</code></pre><p>编译</p><pre tabindex=0><code># gcc uprobe.c -o test
+</code></pre><p>查看汇编代码, 汇编代码占用篇幅比较多，这里只列出了实验需要的部分。
+<code># objdump -d test</code></p><pre tabindex=0><code>0000000000001169 &lt;func_1&gt;:
+    1169:       f3 0f 1e fa             endbr64
+    116d:       55                      push   %rbp
+    116e:       48 89 e5                mov    %rsp,%rbp
+    1171:       48 8d 05 8c 0e 00 00    lea    0xe8c(%rip),%rax        # 2004 &lt;_IO_stdin_used+0x4&gt;
+    1178:       48 89 c7                mov    %rax,%rdi
+    117b:       e8 e0 fe ff ff          call   1060 &lt;puts@plt&gt;
+    1180:       8b 05 8e 2e 00 00       mov    0x2e8e(%rip),%eax        # 4014 &lt;func_1_num&gt;
+    1186:       83 c0 01                add    $0x1,%eax
+    1189:       89 05 85 2e 00 00       mov    %eax,0x2e85(%rip)        # 4014 &lt;func_1_num&gt;
+    118f:       90                      nop
+    1190:       5d                      pop    %rbp
+    1191:       c3                      ret
+
+0000000000001192 &lt;func_2&gt;:
+    1192:       f3 0f 1e fa             endbr64
+    1196:       55                      push   %rbp
+    1197:       48 89 e5                mov    %rsp,%rbp
+    119a:       48 8d 05 6a 0e 00 00    lea    0xe6a(%rip),%rax        # 200b &lt;_IO_stdin_used+0xb&gt;
+    11a1:       48 89 c7                mov    %rax,%rdi
+    11a4:       e8 b7 fe ff ff          call   1060 &lt;puts@plt&gt;
+    11a9:       8b 05 69 2e 00 00       mov    0x2e69(%rip),%eax        # 4018 &lt;func_2_num&gt;
+    11af:       83 c0 01                add    $0x1,%eax
+    11b2:       89 05 60 2e 00 00       mov    %eax,0x2e60(%rip)        # 4018 &lt;func_2_num&gt;
+    11b8:       90                      nop
+    11b9:       5d                      pop    %rbp
+    11ba:       c3                      ret
+</code></pre><p>探测函数入口func_1的0x1169地址处,func_2的0x1192地址处。 注意这里需要使用程序所在位置路径，绝对路径或者相对路径。</p><pre tabindex=0><code># echo &#39;p:func1 /code/tracing/test:0x1169&#39; &gt; /sys/kernel/debug/tracing/uprobe_events
+# echo &#39;p:func2 /code/tracing/test:0x1192&#39; &gt;&gt; /sys/kernel/debug/tracing/uprobe_events
+# cat /sys/kernel/debug/tracing/uprobe_events
+p:uprobes/func1 /code/tracing/test:0x0000000000001169
+p:uprobes/func2 /code/tracing/test:0x0000000000001192
+</code></pre><p>使能探测追踪</p><pre tabindex=0><code># ls -l /sys/kernel/debug/tracing/events/uprobes/
+total 0
+-rw-r----- 1 root root 0 11月  9 12:50 enable
+-rw-r----- 1 root root 0 11月  9 12:47 filter
+drwxr-x--- 2 root root 0 11月  9 12:47 func1
+drwxr-x--- 2 root root 0 11月  9 12:47 func2
+
+# echo 1 &gt; /sys/kernel/debug/tracing/events/uprobes/enable
+</code></pre><p>这里同时探测两个点，所有就不用到func1 func2目录下分别使能了。</p><p>观测探测日志追踪记录</p><pre tabindex=0><code>root@kube-virtual-machine:/code/tracing# cat /sys/kernel/debug/tracing/trace
+# tracer: nop
+#
+# entries-in-buffer/entries-written: 2/2   #P:2
+#
+#                                _-----=&gt; irqs-off/BH-disabled
+#                               / _----=&gt; need-resched
+#                              | / _---=&gt; hardirq/softirq
+#                              || / _--=&gt; preempt-depth
+#                              ||| / _-=&gt; migrate-disable
+#                              |||| /     delay
+#           TASK-PID     CPU#  |||||  TIMESTAMP  FUNCTION
+#              | |         |   |||||     |         |
+            test-100587  [000] DNZff 106874.691156: func1: (0x55a837234169)
+            test-100587  [000] DNZff 106875.693495: func2: (0x55a837234192)
+</code></pre><h2 id=ebpf系列预告>ebpf系列预告</h2><p>追踪系列已接近尾声，时时候考虑开始下个系列了。</p><p>下一个系列依然是云原生相关，而且是比较火热的ebpf。</p><p>敬请期待。。。。</p><p>ebpf系列部分专题</p><h2 id=参考>参考</h2><p><a href=https://opensource.com/article/17/7/dynamic-tracing-linux-user-and-kernel-space>https://opensource.com/article/17/7/dynamic-tracing-linux-user-and-kernel-space</a>
+<a href=https://switch-router.gitee.io/blog/uprobe-kprobe/>https://switch-router.gitee.io/blog/uprobe-kprobe/</a>
+<a href=https://blog.csdn.net/u012489236/article/details/127954817>https://blog.csdn.net/u012489236/article/details/127954817</a>
+<a href=https://blog.seeflower.dev/archives/90/>https://blog.seeflower.dev/archives/90/</a>
+<a href=https://github.com/brendangregg/perf-tools/blob/master/user/uprobe>https://github.com/brendangregg/perf-tools/blob/master/user/uprobe</a>
+<a href=https://www.expoli.tech/articles/2023/01/06/bpf-example-program-uprobes>https://www.expoli.tech/articles/2023/01/06/bpf-example-program-uprobes</a>
+<a href=https://blog.quarkslab.com/defeating-ebpf-uprobe-monitoring.html>https://blog.quarkslab.com/defeating-ebpf-uprobe-monitoring.html</a>
+<a href=https://www.cnblogs.com/revercc/p/17803876.html>https://www.cnblogs.com/revercc/p/17803876.html</a>
+<a href="https://docs.kernel.org/trace/uprobetracer.html?highlight=uprobe">https://docs.kernel.org/trace/uprobetracer.html?highlight=uprobe</a></p></div></div><div class="hidden lg:block lg:col-span-1"><div class=mb-3><form class=widget-search__form role=search method=get action=https://google.com/search><label><input class="w-full p-3 focus:outline-none dark:bg-warmgray-900 dark:text-white placeholder-gray-700 dark:placeholder-gray-300" type=search placeholder=Search... name=q aria-label=Search>
+</label><input class=hidden type=submit value=Search>
+<input type=hidden name=sitesearch value=http://www.ebpflab.com/></form></div><div class="bg-white panel mb-3 pb-5 dark:bg-warmgray-900"><p class="text-xl text-center text-gray-700 py-3 px-3 dark:text-gray-300 font-bold">Archives</p></div><div class="bg-white panel mb-3 pb-5 dark:bg-warmgray-900"><p class="text-xl text-center text-gray-700 py-5 dark:text-gray-300 font-bold">Categories</p><a class="text-center block duration-100 py-2 px-4 mx-4 hover:bg-gray-100 text-gray-800 dark:text-gray-200 dark:hover:bg-warmgray-800" href=http://www.ebpflab.com//categories/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7>可观测性</a></div><div class="bg-white panel mb-3 pb-5 dark:bg-warmgray-900"><p class="text-xl text-center text-gray-700 py-5 dark:text-gray-300 font-bold">Recent Posts</p><div class=mx-6><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7ftrace/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 ftrace</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 kprobe</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe-ebpf/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 kprobe ebpf</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7kprobe-trace/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 kprobe trace</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a><a href=/posts/%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7uprobe/><div class="w-full block mt-3 bg-white hover:bg-gray-100 duration-200 dark:bg-warmgray-900 dark:text-gray-200 dark:hover:bg-warmgray-800"><div class=px-2><div class="text-gray-900 font-bold text-xl dark:text-white">可观测性 uprobe</div><p class="text-sm text-gray-600 flex items-center pb-1 dark:text-gray-400"><time><span class="icon-access_time mr-1"></span>2024/01/11</time></p></div></div></a></div></div></div></div></div></div><footer class="bg-gray-800 text-white p-6"><div class="container max-w-screen-xl mr-auto ml-auto"><p>&copy; 2024 <a href=http://www.ebpflab.com/ class="duration-200 hover:opacity-50">eBPFLAB 专注eBPF创新技术</a></p><p>Powered by <a href=https://gohugo.io/ class="duration-200 hover:opacity-50">Hugo</a>, Theme <a href=https://github.com/opera7133/Blonde class="duration-200 hover:opacity-50">Blonde</a>.
+Copyright &copy; eBPFLAB <a href=https://beian.miit.gov.cn/#/Integrated/index class="duration-200 hover:opacity-50">京ICP备2024042531号-1</a></p></div><script>var icon=document.getElementById("icon"),icon2=document.getElementById("icon2");document.documentElement.classList.contains("dark")||localStorage.theme==="dark"||!("theme"in localStorage)&&window.matchMedia("(prefers-color-scheme: dark)").matches?(icon.classList.remove("icon-moon"),icon.classList.add("icon-sun"),icon2.classList.remove("icon-moon"),icon2.classList.add("icon-sun"),document.documentElement.classList.add("dark")):document.documentElement.classList.remove("dark");function toggleDarkMode(){document.documentElement.classList.contains("dark")?(icon.classList.remove("icon-sun"),icon.classList.add("icon-moon"),icon2.classList.remove("icon-sun"),icon2.classList.add("icon-moon"),document.documentElement.classList.remove("dark"),localStorage.theme="light"):(icon.classList.remove("icon-moon"),icon.classList.add("icon-sun"),icon2.classList.remove("icon-moon"),icon2.classList.add("icon-sun"),document.documentElement.classList.add("dark"),localStorage.theme="dark")}</script></footer></div></body></html>
